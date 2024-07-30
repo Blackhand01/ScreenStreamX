@@ -1,0 +1,7 @@
+[package]
+name = "ScreenStreamX"
+version = "0.1.0"
+authors = ["Stefano Roy Bisignano <stefano2001roy@gmail.com>"]
+edition = "2021"
+# Dipendenze del progetto
+[dependencies]

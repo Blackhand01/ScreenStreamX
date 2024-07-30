@@ -1,0 +1,17 @@
+# Ignora la directory target, dove Cargo mette i file compilati
+/target/
+
+# Ignora il file di lock di Cargo
+Cargo.lock
+
+# Ignora file di sistema
+.DS_Store
+
+# Ignora file di configurazione di editor/IDE
+.idea/
+.vscode/
+*.iml
+
+# Ignora altri file temporanei
+*.log
+*.tmp
