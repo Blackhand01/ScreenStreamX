@@ -1,8 +1,5 @@
 #[tokio::main]
 async fn main() {
-    gui::run().await;
+    println!("Hello, world!");
 }
 
-mod gui;
-mod capture;
-mod network;
