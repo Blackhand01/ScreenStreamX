@@ -2,7 +2,7 @@ mod app;
 mod ai;
 mod utils;
 
-use app::gui::initialize;
+use app::gui::app_main::initialize;
 use ai::transcription::Transcriber;
 use utils::hotkeys::HotkeyManager;
 
