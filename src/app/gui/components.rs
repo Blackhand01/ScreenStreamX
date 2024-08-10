@@ -4,11 +4,11 @@ use crate::app::capture::{ScreenCapturer, CaptureArea};
 use crate::utils::annotations::toggle_annotation_tools;
 use crate::utils::multi_monitor::multi_monitor_support;
 use std::thread;
-use std::sync::mpsc;
-use std::sync::{Arc, Mutex};
+use std::sync::{mpsc, Arc, Mutex};
 
 pub fn render_caster_ui(ui: &mut egui::Ui, app: &mut MyApp) {
     ui.group(|ui| {
+        println!("Rendering Caster UI...");
         ui.label(egui::RichText::new("Caster mode selected").strong());
         ui.add_space(10.0);
 
@@ -21,7 +21,7 @@ pub fn render_caster_ui(ui: &mut egui::Ui, app: &mut MyApp) {
                     .strong()
             ).fill(egui::Color32::from_rgb(255, 153, 102))
         ).clicked() {
-            // Imposta un'area di cattura predefinita (da sostituire con logica di selezione reale).
+            println!("Select Capture Area clicked");
             app.set_capture_area(Some(CaptureArea {
                 x: 100,  // Posizione X
                 y: 100,  // Posizione Y
@@ -45,6 +45,7 @@ pub fn render_caster_ui(ui: &mut egui::Ui, app: &mut MyApp) {
                     .strong()
             ).fill(egui::Color32::from_rgb(153, 0, 153))
         ).clicked() {
+            println!("Toggle Annotation Tools clicked");
             toggle_annotation_tools(app);
         }
 
@@ -59,6 +60,7 @@ pub fn render_caster_ui(ui: &mut egui::Ui, app: &mut MyApp) {
                     .strong()
             ).fill(egui::Color32::from_rgb(102, 204, 255))
         ).clicked() {
+            println!("Multi-Monitor Support clicked");
             multi_monitor_support();
         }
 
@@ -82,46 +84,48 @@ pub fn render_caster_ui(ui: &mut egui::Ui, app: &mut MyApp) {
             ))
         ).clicked() {
             if app.is_recording() {
+                println!("Stopping broadcast...");
                 app.set_recording(false);
+
+                // Usa il canale per inviare un segnale di stop al thread
+                if let Some(tx) = app.get_stop_tx() {
+                    if let Err(e) = tx.send(()) {
+                        println!("Failed to send stop signal: {:?}", e);
+                    }
+                }
             } else {
+                println!("Starting broadcast...");
                 app.set_recording(true);
 
                 // Clone o copia i dati necessari
                 let capture_area = app.get_capture_area().cloned();
                 let recording_flag = Arc::new(Mutex::new(true));
-
                 let recording_flag_clone = Arc::clone(&recording_flag);
+
+                let (tx, rx) = mpsc::channel();
+                app.set_stop_tx(Some(tx));
 
                 // Avvia un nuovo thread per catturare e trasmettere i frame dello schermo
                 thread::spawn(move || {
+                    println!("Broadcast thread started");
                     let mut screen_capturer = ScreenCapturer::new(capture_area);
 
                     while *recording_flag_clone.lock().unwrap() {
+                        if rx.try_recv().is_ok() {
+                            println!("Received stop signal, stopping broadcast...");
+                            *recording_flag_clone.lock().unwrap() = false;
+                            break;
+                        }
+
                         if let Some(frame) = screen_capturer.capture_frame() {
+                            println!("Captured a frame, saving...");
                             // Qui dovrebbe essere implementata la logica di trasmissione
                             // Al momento viene salvato come screenshot singolo per esempio
                             frame.save("broadcast_frame.png").expect("Failed to save image");
                         }
                     }
+                    println!("Broadcast thread exiting");
                 });
-
-                // Usare un canale per gestire la comunicazione di stop
-                let (tx, rx) = mpsc::channel();
-
-                thread::spawn(move || {
-                    while let Ok(message) = rx.recv() {
-                        if message == "stop" {
-                            let mut flag = recording_flag.lock().unwrap();
-                            *flag = false;
-                            break;
-                        }
-                    }
-                });
-
-                // Quando l'utente ferma la registrazione
-                if !app.is_recording() {
-                    tx.send("stop").expect("Failed to send stop signal");
-                }
             }
         }
     });
@@ -129,6 +133,7 @@ pub fn render_caster_ui(ui: &mut egui::Ui, app: &mut MyApp) {
 
 pub fn render_receiver_ui(ui: &mut egui::Ui, app: &mut MyApp) {
     ui.group(|ui| {
+        println!("Rendering Receiver UI...");
         ui.label(egui::RichText::new("Receiver mode selected").strong());
         ui.add_space(10.0);
 
@@ -159,40 +164,42 @@ pub fn render_receiver_ui(ui: &mut egui::Ui, app: &mut MyApp) {
             ))
         ).clicked() {
             if app.is_recording() {
+                println!("Stopping recording...");
                 app.set_recording(false);
+
+                // Usa il canale per inviare un segnale di stop al thread
+                if let Some(tx) = app.get_stop_tx() {
+                    if let Err(e) = tx.send(()) {
+                        println!("Failed to send stop signal: {:?}", e);
+                    }
+                }
             } else {
+                println!("Starting recording...");
                 app.set_recording(true);
 
                 // Implementa la logica di registrazione della trasmissione
                 let recording_flag = Arc::new(Mutex::new(true));
                 let recording_flag_clone = Arc::clone(&recording_flag);
 
+                let (tx, rx) = mpsc::channel();
+                app.set_stop_tx(Some(tx));
+
                 // Avvia un nuovo thread per ricevere e registrare la trasmissione
                 thread::spawn(move || {
+                    println!("Recording thread started");
                     while *recording_flag_clone.lock().unwrap() {
+                        if rx.try_recv().is_ok() {
+                            println!("Received stop signal for recording, stopping...");
+                            *recording_flag_clone.lock().unwrap() = false;
+                            break;
+                        }
+
                         // Implementare la logica di ricezione e registrazione del frame
                         // Qui potrebbe essere salvato come immagine per esempio
                         // frame.save("received_frame.png").expect("Failed to save image");
                     }
+                    println!("Recording thread exiting");
                 });
-
-                // Usare un canale per gestire la comunicazione di stop
-                let (tx, rx) = mpsc::channel();
-
-                thread::spawn(move || {
-                    while let Ok(message) = rx.recv() {
-                        if message == "stop" {
-                            let mut flag = recording_flag.lock().unwrap();
-                            *flag = false;
-                            break;
-                        }
-                    }
-                });
-
-                // Quando l'utente ferma la registrazione
-                if !app.is_recording() {
-                    tx.send("stop").expect("Failed to send stop signal");
-                }
             }
         }
     });

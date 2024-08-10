@@ -4,6 +4,7 @@ use crate::app::capture::CaptureArea;
 
 use super::visuals::configure_visuals;
 use super::visuals::central_panel;
+use std::sync::mpsc;
 
 pub fn initialize() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions::default();
@@ -14,12 +15,14 @@ pub fn initialize() -> Result<(), eframe::Error> {
     )
 }
 
+
 pub struct MyApp {
     is_caster: bool,
     address: String,
     is_annotation_tools_active: bool,
     is_recording: bool,
-    capture_area: Option<CaptureArea>,  // Aggiunto per gestire l'area di cattura
+    capture_area: Option<CaptureArea>,
+    stop_tx: Option<mpsc::Sender<()>>,  // Campo privato
 }
 
 impl MyApp {
@@ -35,6 +38,7 @@ impl MyApp {
             is_annotation_tools_active: false,
             is_recording: false,
             capture_area: None,
+            stop_tx: None,  // Inizialmente nessun canale di stop
         }
     }
 
@@ -80,7 +84,18 @@ impl MyApp {
     pub fn set_capture_area(&mut self, area: Option<CaptureArea>) {
         self.capture_area = area;
     }
+
+    // Getter per stop_tx
+    pub fn get_stop_tx(&self) -> Option<mpsc::Sender<()>> {
+        self.stop_tx.clone()
+    }
+
+    // Setter per stop_tx
+    pub fn set_stop_tx(&mut self, tx: Option<mpsc::Sender<()>>) {
+        self.stop_tx = tx;
+    }
 }
+
 
 
 impl App for MyApp {
