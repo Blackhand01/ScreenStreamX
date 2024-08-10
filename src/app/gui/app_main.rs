@@ -1,5 +1,6 @@
 use eframe::{egui, App, CreationContext};
 use local_ip_address::local_ip;
+use crate::app::capture::CaptureArea;
 
 use super::visuals::configure_visuals;
 use super::visuals::central_panel;
@@ -18,11 +19,11 @@ pub struct MyApp {
     address: String,
     is_annotation_tools_active: bool,
     is_recording: bool,
+    capture_area: Option<CaptureArea>,  // Aggiunto per gestire l'area di cattura
 }
 
 impl MyApp {
     pub fn new(_cc: &CreationContext<'_>) -> Self {
-        // Ottenere l'indirizzo IP locale
         let ip_address = match local_ip() {
             Ok(ip) => ip.to_string(),
             Err(_) => String::from("Unable to get IP"),
@@ -33,9 +34,11 @@ impl MyApp {
             address: ip_address,
             is_annotation_tools_active: false,
             is_recording: false,
+            capture_area: None,
         }
     }
 
+    // Getter e setter per i vari stati dell'applicazione
     pub fn is_caster(&self) -> bool {
         self.is_caster
     }
@@ -67,11 +70,23 @@ impl MyApp {
     pub fn set_address(&mut self, value: String) {
         self.address = value;
     }
+
+    // Metodo getter per capture_area
+    pub fn get_capture_area(&self) -> Option<&CaptureArea> {
+        self.capture_area.as_ref()
+    }
+
+    // Metodo setter per capture_area
+    pub fn set_capture_area(&mut self, area: Option<CaptureArea>) {
+        self.capture_area = area;
+    }
 }
 
+
 impl App for MyApp {
+    /// Metodo principale di aggiornamento dell'interfaccia utente.
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // Configura gli elementi gratici
+        // Configura gli elementi grafici
         configure_visuals(ctx);
 
         // Configura il pannello centrale
