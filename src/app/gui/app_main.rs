@@ -71,10 +71,10 @@ impl MyApp {
 
 impl App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // Configura i visuals
+        // Configura gli elementi gratici
         configure_visuals(ctx);
 
-        // Centrare il contenuto
+        // Configura il pannello centrale
         central_panel(ctx, self);
     }
 }
