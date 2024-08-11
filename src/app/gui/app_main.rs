@@ -1,3 +1,4 @@
+// src/app/gui/app_main.rs
 use eframe::{egui, App, CreationContext};
 use local_ip_address::local_ip;
 use crate::app::capture::CaptureArea;

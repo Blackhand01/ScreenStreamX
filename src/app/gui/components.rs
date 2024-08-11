@@ -1,3 +1,4 @@
+// src/app/gui/components.rs
 use eframe::egui;
 use crate::app::gui::caster_ui;
 use crate::app::gui::receiver_ui;

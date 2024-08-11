@@ -1,3 +1,4 @@
+// src/app/gui/caster_ui.rs
 use eframe::egui;
 use crate::app::capture::{ScreenCapturer, CaptureArea};
 use crate::utils::annotations::toggle_annotation_tools;

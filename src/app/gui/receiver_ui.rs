@@ -1,3 +1,4 @@
+// src/app/gui/receiver_ui.rs
 use eframe::egui;
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;

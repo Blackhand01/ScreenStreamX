@@ -1,3 +1,4 @@
+// src/app/capture.rs
 use scrap::{Capturer, Display};
 use std::io::ErrorKind::WouldBlock;
 use std::thread;

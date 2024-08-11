@@ -1,3 +1,4 @@
+// src/app/gui/visuals.rs
 use eframe::egui;
 use super::app_main::MyApp;
 use super::components::{render_caster_ui, render_receiver_ui};
