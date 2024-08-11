@@ -99,7 +99,7 @@ impl MyApp {
 
 
 impl App for MyApp {
-    /// Metodo principale di aggiornamento dell'interfaccia utente.
+    /// Metodo principale di aggiornamento dell'interfaccia utente (ciclo di eventi).
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         // Configura gli elementi grafici
         configure_visuals(ctx);
