@@ -3,8 +3,7 @@ use eframe::{egui, App, CreationContext};
 use local_ip_address::local_ip;
 use crate::app::capture::CaptureArea;
 
-use super::visuals::configure_visuals;
-use super::visuals::central_panel;
+use super::visuals::{configure_visuals, central_panel, capture_area_panel};
 use std::sync::mpsc;
 
 pub fn initialize() -> Result<(), eframe::Error> {
@@ -24,6 +23,7 @@ pub struct MyApp {
     is_recording: bool,
     capture_area: Option<CaptureArea>,
     stop_tx: Option<mpsc::Sender<()>>,  // Campo privato
+    selecting_area: bool, // Nuovo campo per gestire la modalità di selezione dell'area
 }
 
 impl MyApp {
@@ -38,8 +38,9 @@ impl MyApp {
             address: ip_address,
             is_annotation_tools_active: false,
             is_recording: false,
-            capture_area: None,
+            capture_area: Some(CaptureArea::default()), // Inizializza con un'area di cattura vuota
             stop_tx: None,  // Inizialmente nessun canale di stop
+            selecting_area: false, // Inizialmente la selezione non è attiva
         }
     }
 
@@ -76,24 +77,32 @@ impl MyApp {
         self.address = value;
     }
 
-    // Metodo getter per capture_area
-    pub fn get_capture_area(&self) -> Option<&CaptureArea> {
-        self.capture_area.as_ref()
-    }
-
-    // Metodo setter per capture_area
-    pub fn set_capture_area(&mut self, area: Option<CaptureArea>) {
-        self.capture_area = area;
-    }
-
-    // Getter per stop_tx
     pub fn get_stop_tx(&self) -> Option<mpsc::Sender<()>> {
         self.stop_tx.clone()
     }
 
-    // Setter per stop_tx
     pub fn set_stop_tx(&mut self, tx: Option<mpsc::Sender<()>>) {
         self.stop_tx = tx;
+    }
+
+    pub fn is_selecting_area(&self) -> bool {
+        self.selecting_area
+    }
+
+    pub fn set_selecting_area(&mut self, value: bool) {
+        self.selecting_area = value;
+    }
+
+    pub fn get_capture_area(&self) -> Option<&CaptureArea> {
+        self.capture_area.as_ref()
+    }
+
+    pub fn get_capture_area_mut(&mut self) -> Option<&mut CaptureArea> {
+        self.capture_area.as_mut()
+    }
+
+    pub fn set_capture_area(&mut self, area: Option<CaptureArea>) {
+        self.capture_area = area;
     }
 }
 
@@ -102,10 +111,13 @@ impl MyApp {
 impl App for MyApp {
     /// Metodo principale di aggiornamento dell'interfaccia utente (ciclo di eventi).
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        // Configura gli elementi grafici
-        configure_visuals(ctx);
-
-        // Configura il pannello centrale
-        central_panel(ctx, self);
+        if self.is_selecting_area() {
+            capture_area_panel(ctx, self);
+        } else {
+            // UI normale
+            configure_visuals(ctx);
+            central_panel(ctx, self);
+        }
     }
+    
 }
