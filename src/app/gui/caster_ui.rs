@@ -1,11 +1,16 @@
-// src/app/gui/caster_ui.rs
 use eframe::egui;
 use crate::app::capture::ScreenCapturer;
 use crate::utils::annotations::toggle_annotation_tools;
 use crate::utils::multi_monitor::multi_monitor_support;
 use std::sync::{mpsc, Arc, Mutex};
-use std::thread;
+use std::{thread, fs};
+use std::process::{Command, Stdio};
+use std::io::Write;
+use std::time::{Duration, Instant};
 use super::app_main::MyApp;
+
+const TARGET_FRAMERATE: u64 = 10; // Riduci il framerate target per evitare velocizzazioni
+const FRAME_DURATION: Duration = Duration::from_millis(1000 / TARGET_FRAMERATE as u64);
 
 // Funzione per il rendering del pulsante di selezione dell'area di cattura
 pub fn render_capture_area_button(ui: &mut egui::Ui, app: &mut MyApp) {
@@ -22,8 +27,6 @@ pub fn render_capture_area_button(ui: &mut egui::Ui, app: &mut MyApp) {
     }
     ui.add_space(10.0);
 }
-
-
 
 // Funzione per il rendering del pulsante di avvio/arresto della trasmissione
 pub fn render_broadcast_button(ui: &mut egui::Ui, app: &mut MyApp) {
@@ -73,8 +76,44 @@ fn start_broadcast(app: &mut MyApp) {
     let (tx, rx) = mpsc::channel();
     app.set_stop_tx(Some(tx));
 
+    // Ottieni la larghezza e l'altezza dello schermo da catturare
+    let (width, height) = match &capture_area {
+        Some(area) => (area.width, area.height),
+        None => {
+            let display = scrap::Display::primary().unwrap();
+            (display.width(), display.height())
+        }
+    };
+
+    // Ensure the "recording" directory exists
+    let recording_dir = "recording";
+    fs::create_dir_all(recording_dir).expect("Failed to create recording directory");
+
     thread::spawn(move || {
         println!("Broadcast thread started");
+
+        // Lancia `ffmpeg` per salvare lo stream video in un file MP4 nella cartella "recording"
+        let mut child = Command::new("ffmpeg")
+            .args(&[
+                "-f", "rawvideo",
+                "-pixel_format", "bgra",
+                "-video_size", &format!("{}x{}", width, height),
+                "-framerate", &TARGET_FRAMERATE.to_string(),
+                "-i", "-", // Legge dallo stdin
+                "-vf", "format=yuv420p", // Filtra per convertire in un formato compatibile
+                "-codec:v", "libx264", // Codec video
+                "-preset", "medium",  // Preset di codifica più compatibile
+                "-profile:v", "high",  // Profilo H.264 compatibile con QuickTime
+                "-level", "4.0",       // Livello compatibile con QuickTime
+                "-pix_fmt", "yuv420p", // Formato pixel compatibile
+                "-y", &format!("{}/broadcast_video.mp4", recording_dir) // Nome del file di output con percorso
+            ])
+            .stdin(Stdio::piped())
+            .spawn()
+            .expect("Failed to start ffmpeg process");
+
+        let mut out = child.stdin.take().expect("Failed to open stdin");
+
         let mut screen_capturer = ScreenCapturer::new(capture_area);
 
         while *recording_flag_clone.lock().unwrap() {
@@ -84,14 +123,30 @@ fn start_broadcast(app: &mut MyApp) {
                 break;
             }
 
+            let start_time = Instant::now();
+
             if let Some(frame) = screen_capturer.capture_frame() {
-                println!("Captured a frame, saving...");
-                frame.save("broadcast_frame.png").expect("Failed to save image");
+                let stride = frame.len() / height;
+                let rowlen = 4 * width;
+                for row in frame.chunks(stride) {
+                    let row = &row[..rowlen];
+                    out.write_all(row).expect("Failed to write frame to ffmpeg");
+                }
+            }
+
+            // Sincronizzazione del framerate
+            let elapsed = start_time.elapsed();
+            if elapsed < FRAME_DURATION {
+                thread::sleep(FRAME_DURATION - elapsed);
+            } else {
+                println!("Warning: Frame took too long to capture, possible overload");
             }
         }
+
         println!("Broadcast thread exiting");
     });
 }
+
 
 // Funzione per fermare la trasmissione dello schermo
 fn stop_broadcast(app: &mut MyApp) {
