@@ -4,6 +4,27 @@ use std::io::ErrorKind::WouldBlock;
 use std::thread;
 use std::time::Duration;
 use image::{ImageBuffer, Rgba};
+use serde::{Serialize, Deserialize};
+
+// Definizione di ScreenCapture per la serializzazione
+#[derive(Serialize, Deserialize, Debug)]
+pub struct ScreenCapture {
+    pub width: u32,
+    pub height: u32,
+    pub data: Vec<u8>, // I dati dell'immagine memorizzati come un vettore di byte
+}
+
+impl ScreenCapture {
+    pub fn from_image_buffer(buffer: &ImageBuffer<Rgba<u8>, Vec<u8>>) -> Self {
+        let (width, height) = buffer.dimensions();
+        let data = buffer.clone().into_raw();
+        ScreenCapture { width, height, data }
+    }
+
+    pub fn into_image_buffer(self) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
+        ImageBuffer::from_raw(self.width, self.height, self.data).expect("Errore nella conversione in ImageBuffer")
+    }
+}
 
 #[derive(Clone, Debug, Default)]
 pub struct DragState {
@@ -88,26 +109,25 @@ impl ScreenCapturer {
     }
 
     /// Cattura un singolo frame dello schermo o dell'area selezionata.
-    pub fn capture_frame(&mut self) -> Option<ImageBuffer<Rgba<u8>, Vec<u8>>> {
+    pub fn capture_frame(&mut self) -> Option<ScreenCapture> {
         loop {
             match self.capturer.frame() {
                 Ok(frame) => {
                     let frame = frame.to_vec();
                     let mut buffer = ImageBuffer::new(self.width as u32, self.height as u32);
 
-                    // Converti i dati raw in un'immagine RGBA
                     for (x, y, pixel) in buffer.enumerate_pixels_mut() {
                         let idx = (y as usize * self.width + x as usize) * 4;
                         *pixel = Rgba([frame[idx + 2], frame[idx + 1], frame[idx], 255]);
                     }
 
-                    // Se è stata definita un'area di cattura, taglia l'immagine a quell'area.
-                    return match &self.capture_area {
-                        Some(area) => Some(self.crop_frame(&buffer, area)),
-                        None => Some(buffer),
+                    let image_buffer = match &self.capture_area {
+                        Some(area) => self.crop_frame(&buffer, area),
+                        None => buffer,
                     };
+
+                    return Some(ScreenCapture::from_image_buffer(&image_buffer));
                 }
-                // Se non è pronto, aspetta un po' e riprova.
                 Err(ref e) if e.kind() == WouldBlock => {
                     thread::sleep(Duration::from_millis(10));
                     continue;
