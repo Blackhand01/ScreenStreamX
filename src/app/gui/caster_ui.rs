@@ -5,11 +5,15 @@ use crate::app::capture::ScreenCapturer;
 use crate::utils::annotations::toggle_annotation_tools;
 use crate::utils::multi_monitor::multi_monitor_support;
 use std::sync::{mpsc, Arc, Mutex};
-use std::thread;
-use crate::app::network::start_server; // Importa la funzione per avviare il server
-use super::app_main::MyApp;
-use std::net::{TcpListener, TcpStream};
+use std::{thread, fs};
+use std::process::{Command, Stdio};
 use std::io::Write;
+use std::time::{Duration, Instant};
+use super::app_main::MyApp;
+use std::net::TcpListener;
+
+const TARGET_FRAMERATE: u64 = 10; // Riduci il framerate target per evitare velocizzazioni
+const FRAME_DURATION: Duration = Duration::from_millis(1000 / TARGET_FRAMERATE as u64);
 
 // Funzione per il rendering del pulsante di selezione dell'area di cattura
 pub fn render_capture_area_button(ui: &mut egui::Ui, app: &mut MyApp) {
@@ -63,14 +67,12 @@ fn handle_broadcast_button_click(app: &mut MyApp) {
 }
 
 // Funzione per avviare la trasmissione dello schermo
-
 fn start_broadcast(app: &mut MyApp) {
     println!("Starting broadcast...");
     app.set_recording(true);
 
     let capture_area = app.get_capture_area().cloned().filter(|area| area.is_valid());
     let recording_flag = Arc::new(Mutex::new(true));
-    let recording_flag_clone = Arc::clone(&recording_flag);
 
     let (tx, rx) = mpsc::channel();
     app.set_stop_tx(Some(tx));
@@ -78,16 +80,51 @@ fn start_broadcast(app: &mut MyApp) {
     // Creiamo un listener TCP che ascolta su una specifica porta (es: 8080)
     let listener = TcpListener::bind("0.0.0.0:8080").expect("Failed to bind to address");
 
-    println!("Waiting for receiver to connect...");
+    // Ottieni la larghezza e l'altezza dello schermo da catturare
+    let (width, height) = match &capture_area {
+        Some(area) => (area.width, area.height),
+        None => {
+            let display = scrap::Display::primary().unwrap();
+            (display.width(), display.height())
+        }
+    };
 
-    // Aspettiamo una connessione da parte di un receiver
-    if let Ok((mut stream, _addr)) = listener.accept() {
-        println!("Receiver connected, starting broadcast...");
+    // Ensure the "recording" directory exists
+    let recording_dir = "recording";
+    fs::create_dir_all(recording_dir).expect("Failed to create recording directory");
 
-        thread::spawn(move || {
-            println!("Broadcast thread started");
+    thread::spawn(move || {
+        println!("Broadcast thread started");
 
-            let mut screen_capturer = ScreenCapturer::new(capture_area);
+        // Lancia `ffmpeg` per salvare lo stream video in un file MP4 nella cartella "recording"
+        let mut child = Command::new("ffmpeg")
+            .args(&[
+                "-f", "rawvideo",
+                "-pixel_format", "bgra",
+                "-video_size", &format!("{}x{}", width, height),
+                "-framerate", &TARGET_FRAMERATE.to_string(),
+                "-i", "-", // Legge dallo stdin
+                "-vf", "format=yuv420p", // Filtra per convertire in un formato compatibile
+                "-codec:v", "libx264", // Codec video
+                "-preset", "ultrafast",  // Preset di codifica più compatibile
+                "-profile:v", "high",  // Profilo H.264 compatibile con QuickTime
+                "-level", "4.0",       // Livello compatibile con QuickTime
+                "-pix_fmt", "yuv420p", // Formato pixel compatibile
+                "-y", &format!("{}/broadcast_video.mp4", recording_dir) // Nome del file di output con percorso
+            ])
+            .stdin(Stdio::piped())
+            .spawn()
+            .expect("Failed to start ffmpeg process");
+
+        let mut out = child.stdin.take().expect("Failed to open stdin");
+
+        let mut screen_capturer = ScreenCapturer::new(capture_area);
+
+        println!("Waiting for receiver to connect...");
+
+        // Aspettiamo una connessione da parte di un receiver
+        if let Ok((mut stream, _addr)) = listener.accept() {
+            println!("Receiver connected, starting broadcast...");
 
             while *recording_flag.lock().unwrap() {
                 if rx.try_recv().is_ok() {
@@ -95,6 +132,9 @@ fn start_broadcast(app: &mut MyApp) {
                     *recording_flag.lock().unwrap() = false;
                     break;
                 }
+
+                // Sincronizzazione del framerate
+                let start_time = Instant::now();
 
                 if let Some(frame) = screen_capturer.capture_frame() {
                     println!("Captured a frame, sending...");
@@ -117,19 +157,34 @@ fn start_broadcast(app: &mut MyApp) {
                         println!("Failed to send frame data: {:?}", e);
                         break;
                     }
+
+                    // Scrivi il frame nel file video usando `ffmpeg`
+                    let frame_imgbuffer = frame.into_image_buffer();
+                    let stride = frame_imgbuffer.len() / height;
+                    let rowlen = 4 * width;
+                    for row in frame_imgbuffer.chunks(stride) {
+                        let row = &row[..rowlen];
+                        out.write_all(row).expect("Failed to write frame to ffmpeg");
+                    }
                 } else {
                     println!("Failed to capture frame.");
+                }
+
+                
+                let elapsed = start_time.elapsed();
+                if elapsed < FRAME_DURATION {
+                    thread::sleep(FRAME_DURATION - elapsed);
+                } else {
+                    println!("Warning: Frame took too long to capture, possible overload");
                 }
             }
 
             println!("Broadcast thread exiting");
-        });
-    } else {
-        println!("Failed to accept connection from receiver.");
-    }
+        } else {
+            println!("Failed to accept connection from receiver.");
+        }
+    });
 }
-
-
 
 // Funzione per fermare la trasmissione dello schermo
 fn stop_broadcast(app: &mut MyApp) {

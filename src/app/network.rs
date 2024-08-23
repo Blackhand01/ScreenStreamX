@@ -1,35 +1,12 @@
 // src/app/network.rs
 
-use crate::app::capture::{ScreenCapturer, ScreenCapture, CaptureArea};  // Importa correttamente ScreenCapturer e CaptureArea
-use std::net::{TcpListener, TcpStream};
-use std::io::{Read, Write};
+use crate::app::capture:: ScreenCapture;  // Importa correttamente ScreenCapturer e CaptureArea
+use std::net::TcpStream;
+use std::io::Read;
 use std::sync::{Arc, Mutex};
 use std::thread;
 use bincode;
 
-/// Funzione per avviare il server che trasmette i frame catturati.
-pub fn start_server(capture_area: Option<CaptureArea>, recording_flag: Arc<Mutex<bool>>) {
-    let listener = TcpListener::bind("0.0.0.0:8080").expect("Impossibile avviare il server");
-
-    thread::spawn(move || {
-        println!("Broadcast server started");
-
-        if let Ok((mut stream, _addr)) = listener.accept() {
-            println!("Connection established with receiver");
-
-            let mut screen_capturer = ScreenCapturer::new(capture_area);
-
-            while *recording_flag.lock().unwrap() {
-                if let Some(frame) = screen_capturer.capture_frame() {
-                    let serialized_frame = bincode::serialize(&frame).expect("Failed to serialize frame");
-                    stream.write_all(&serialized_frame).expect("Failed to send frame");
-                }
-            }
-        }
-
-        println!("Broadcast server exiting");
-    });
-}
 
 /// Funzione per avviare il client che riceve i frame e li processa.
 pub fn start_client(
