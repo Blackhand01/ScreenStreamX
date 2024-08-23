@@ -84,7 +84,10 @@ fn start_receiving(app: &mut MyApp) {
     thread::spawn(move || {
         start_client(&receiver_address, recording_flag_clone, move |frame: ScreenCapture| {
             // Invia il frame attraverso il canale al thread principale
-            frame_tx.send(frame).expect("Failed to send frame");
+            if frame_tx.send(frame).is_err() {
+                println!("Failed to send frame to main thread, exiting client thread.");
+                return; // Esce dal thread client se l'invio fallisce
+            }        
         });
     });
 
@@ -101,16 +104,27 @@ fn start_receiving(app: &mut MyApp) {
             }).collect();
 
             // Aggiorna la finestra con il buffer ricevuto
-            window.update_with_buffer(&buffer, frame.width as usize, frame.height as usize).unwrap();
+            if window.update_with_buffer(&buffer, frame.width as usize, frame.height as usize).is_err() {
+                println!("Failed to update window, stopping.");
+                break;
+            }
         }
 
         // Gestione dell'arresto della ricezione
         if rx.try_recv().is_ok() {
             println!("Received stop signal, stopping receiving...");
-            *recording_flag.lock().unwrap() = false;
-            break;
+            break;  // Esce dal ciclo
         }
+        // Aggiungi un breve sleep per evitare che il ciclo consumi troppa CPU
+        std::thread::sleep(std::time::Duration::from_millis(10));
+        
     }
+
+    
+    println!("Closing window as requested.");
+    // Questo assicura che la finestra sia chiusa correttamente
+    app.set_recording(false);
+    
 
     println!("Receiving thread exiting");
 }

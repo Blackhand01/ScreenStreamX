@@ -67,7 +67,8 @@ pub fn start_client(
                         }
                     }
                 }
-
+                
+                *recording_flag.lock().unwrap() = false;
                 println!("Receiver client exiting");
             });
         }
