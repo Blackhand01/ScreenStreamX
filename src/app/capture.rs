@@ -93,21 +93,13 @@ impl ScreenCapturer {
             match self.capturer.frame() {
                 Ok(frame) => {
                     let frame = frame.to_vec();
-                    let mut buffer = ImageBuffer::new(self.width as u32, self.height as u32);
+                    let buffer = self.create_image_buffer(&frame);
 
-                    // Converti i dati raw in un'immagine RGBA
-                    for (x, y, pixel) in buffer.enumerate_pixels_mut() {
-                        let idx = (y as usize * self.width + x as usize) * 4;
-                        *pixel = Rgba([frame[idx + 2], frame[idx + 1], frame[idx], 255]);
-                    }
-
-                    // Se è stata definita un'area di cattura, taglia l'immagine a quell'area.
                     return match &self.capture_area {
                         Some(area) => Some(self.crop_frame(&buffer, area)),
                         None => Some(buffer),
                     };
                 }
-                // Se non è pronto, aspetta un po' e riprova.
                 Err(ref e) if e.kind() == WouldBlock => {
                     thread::sleep(Duration::from_millis(10));
                     continue;
@@ -115,6 +107,15 @@ impl ScreenCapturer {
                 Err(_) => return None,
             }
         }
+    }
+
+    fn create_image_buffer(&self, frame: &[u8]) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
+        let mut buffer = ImageBuffer::new(self.width as u32, self.height as u32);
+        for (x, y, pixel) in buffer.enumerate_pixels_mut() {
+            let idx = (y as usize * self.width + x as usize) * 4;
+            *pixel = Rgba([frame[idx + 2], frame[idx + 1], frame[idx], 255]);
+        }
+        buffer
     }
 
     /// Taglia l'immagine catturata all'area specificata.

@@ -1,4 +1,3 @@
-// src/app/gui/components.rs
 use eframe::egui;
 use crate::app::gui::caster_ui;
 use crate::app::gui::receiver_ui;
@@ -14,7 +13,6 @@ pub fn render_caster_ui(ui: &mut egui::Ui, app: &mut MyApp) {
         caster_ui::render_annotation_toggle_button(ui, app);
         caster_ui::render_multi_monitor_support_button(ui);
         caster_ui::render_broadcast_button(ui, app);
-        
     });
 }
 

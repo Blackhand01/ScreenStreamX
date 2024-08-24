@@ -9,7 +9,7 @@ use std::io::Write;
 use std::time::{Duration, Instant};
 use super::app_main::MyApp;
 
-const TARGET_FRAMERATE: u64 = 10; // Riduci il framerate target per evitare velocizzazioni
+const TARGET_FRAMERATE: u64 = 10; // Riduci il framerate target per evitare sovraccarichi
 const FRAME_DURATION: Duration = Duration::from_millis(1000 / TARGET_FRAMERATE as u64);
 
 // Funzione per il rendering del pulsante di selezione dell'area di cattura
@@ -23,7 +23,7 @@ pub fn render_capture_area_button(ui: &mut egui::Ui, app: &mut MyApp) {
         ).fill(egui::Color32::from_rgb(255, 153, 102))
     ).clicked() {
         println!("Select Capture Area clicked");
-        app.set_selecting_area(true);
+        app.set_selecting_area(true); // Passa alla modalità di selezione dell'area
     }
     ui.add_space(10.0);
 }
@@ -37,9 +37,9 @@ pub fn render_broadcast_button(ui: &mut egui::Ui, app: &mut MyApp) {
     };
 
     let button_color = if app.is_recording() {
-        egui::Color32::from_rgb(102, 0, 0)
+        egui::Color32::from_rgb(102, 0, 0) // Rosso per indicare la trasmissione attiva
     } else {
-        egui::Color32::from_rgb(204, 51, 51)
+        egui::Color32::from_rgb(204, 51, 51) // Rosso più chiaro per avviare la trasmissione
     };
 
     if ui.add_sized(
@@ -50,16 +50,16 @@ pub fn render_broadcast_button(ui: &mut egui::Ui, app: &mut MyApp) {
                 .strong()
         ).fill(button_color)
     ).clicked() {
-        handle_broadcast_button_click(app);
+        handle_broadcast_button_click(app); // Gestione del clic sul pulsante
     }
 }
 
 // Gestione del clic sul pulsante di avvio/arresto della trasmissione
 fn handle_broadcast_button_click(app: &mut MyApp) {
     if app.is_recording() {
-        stop_broadcast(app);
+        stop_broadcast(app); // Ferma la trasmissione se è in corso
     } else {
-        start_broadcast(app);
+        start_broadcast(app); // Avvia la trasmissione
     }
 }
 
@@ -85,7 +85,7 @@ fn start_broadcast(app: &mut MyApp) {
         }
     };
 
-    // Ensure the "recording" directory exists
+    // Assicura che la directory "recording" esista
     let recording_dir = "recording";
     fs::create_dir_all(recording_dir).expect("Failed to create recording directory");
 
@@ -146,7 +146,6 @@ fn start_broadcast(app: &mut MyApp) {
         println!("Broadcast thread exiting");
     });
 }
-
 
 // Funzione per fermare la trasmissione dello schermo
 fn stop_broadcast(app: &mut MyApp) {
