@@ -75,12 +75,7 @@ fn start_receiving(app: &mut MyApp) {
         "Receiver Window",
         1440,
         900,
-        WindowOptions {
-            resize: true,      // Consente il ridimensionamento della finestra
-            borderless: false, // Disattiva la modalità senza bordi per avere i controlli standard della finestra (incluso il pulsante di chiusura)
-            title: true,       // Mostra il titolo della finestra (incluso il pulsante di chiusura)
-            ..WindowOptions::default()
-        },
+        WindowOptions::default(),
     ).unwrap_or_else(|e| {
         panic!("{}", e);
     });
