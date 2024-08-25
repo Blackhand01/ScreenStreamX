@@ -27,14 +27,14 @@ pub fn render_capture_area_button(ui: &mut egui::Ui, app: &mut MyApp) {
         .fill(egui::Color32::from_rgb(255, 153, 102)), // Colore arancione per la selezione dell'area
     ).clicked() {
         println!("Select Capture Area clicked");
-        app.set_selecting_area(true); // Passa alla modalità di selezione dell'area
+        app.ui_state.set_selecting_area(true); // Passa alla modalità di selezione dell'area
     }
     ui.add_space(10.0);
 }
 
 /// Funzione per il rendering del pulsante di avvio/arresto della trasmissione
 pub fn render_broadcast_button(ui: &mut egui::Ui, app: &mut MyApp) {
-    let (button_label, button_color) = if app.is_broadcasting() {
+    let (button_label, button_color) = if app.flags.is_broadcasting() {
         ("Stop Broadcasting", egui::Color32::from_rgb(102, 0, 0)) // Rosso per indicare la trasmissione attiva
     } else {
         ("Start Broadcasting", egui::Color32::from_rgb(204, 51, 51)) // Rosso più chiaro per avviare la trasmissione
@@ -56,7 +56,7 @@ pub fn render_broadcast_button(ui: &mut egui::Ui, app: &mut MyApp) {
 
 /// Funzione per il rendering del pulsante di avvio/arresto della registrazione
 pub fn render_record_button(ui: &mut egui::Ui, app: &mut MyApp) {
-    let (button_label, button_color) = if app.is_recording() {
+    let (button_label, button_color) = if app.flags.is_recording() {
         ("Stop Recording", egui::Color32::from_rgb(102, 0, 0)) // Rosso per indicare la registrazione attiva
     } else {
         ("Start Recording", egui::Color32::from_rgb(204, 51, 51)) // Rosso più chiaro per avviare la registrazione
@@ -78,7 +78,7 @@ pub fn render_record_button(ui: &mut egui::Ui, app: &mut MyApp) {
 
 /// Gestione del clic sul pulsante di avvio/arresto della trasmissione
 fn handle_broadcast_button_click(app: &mut MyApp) {
-    if app.is_broadcasting() {
+    if app.flags.is_broadcasting() {
         stop_broadcast(app); // Ferma la trasmissione se è in corso
     } else {
         start_broadcast(app); // Avvia la trasmissione
@@ -87,7 +87,7 @@ fn handle_broadcast_button_click(app: &mut MyApp) {
 
 /// Gestione del clic sul pulsante di avvio/arresto della registrazione
 fn handle_record_button_click(app: &mut MyApp) {
-    if app.is_recording() {
+    if app.flags.is_recording() {
         stop_record(app); // Ferma la registrazione se è in corso
     } else {
         start_record(app); // Avvia la registrazione
@@ -97,13 +97,13 @@ fn handle_record_button_click(app: &mut MyApp) {
 /// Funzione per avviare la trasmissione dello schermo
 fn start_broadcast(app: &mut MyApp) {
     println!("Starting broadcast...");
-    app.set_broadcasting(true);
+    app.flags.set_broadcasting(true);
 
-    let capture_area = app.get_capture_area().cloned().filter(|area| area.is_valid());
+    let capture_area = app.capture.get_capture_area().cloned().filter(|area| area.is_valid());
     let broadcast_flag = Arc::new(Mutex::new(true));
 
     let (tx, rx) = mpsc::channel();
-    app.set_broadcast_stop_tx(Some(tx));
+    app.network.set_broadcast_stop_tx(Some(tx));
 
     
     thread::spawn(move || {
@@ -114,13 +114,13 @@ fn start_broadcast(app: &mut MyApp) {
 /// Funzione per avviare la registrazione dello schermo
 fn start_record(app: &mut MyApp) {
     println!("Starting recording...");
-    app.set_recording(true);
+    app.flags.set_recording(true);
 
-    let capture_area = app.get_capture_area().cloned().filter(|area| area.is_valid());
+    let capture_area = app.capture.get_capture_area().cloned().filter(|area| area.is_valid());
     let record_flag = Arc::new(Mutex::new(true));
 
     let (tx, rx) = mpsc::channel();
-    app.set_record_stop_tx(Some(tx));
+    app.network.set_record_stop_tx(Some(tx));
 
     let (width, height) = get_capture_dimensions(&capture_area);
 
@@ -134,9 +134,9 @@ fn start_record(app: &mut MyApp) {
 /// Funzione per fermare la trasmissione dello schermo
 fn stop_broadcast(app: &mut MyApp) {
     println!("Stopping broadcast...");
-    app.set_broadcasting(false);
+    app.flags.set_broadcasting(false);
 
-    if let Some(tx) = app.get_broadcast_stop_tx() {
+    if let Some(tx) = app.network.get_broadcast_stop_tx() {
         if let Err(e) = tx.send(()) {
             println!("Failed to send stop signal: {:?}", e);
         }
@@ -146,9 +146,9 @@ fn stop_broadcast(app: &mut MyApp) {
 /// Funzione per fermare la registrazione dello schermo
 fn stop_record(app: &mut MyApp) {
     println!("Stopping recording...");
-    app.set_recording(false);
+    app.flags.set_recording(false);
 
-    if let Some(tx) = app.get_record_stop_tx() {
+    if let Some(tx) = app.network.get_record_stop_tx() {
         if let Err(e) = tx.send(()) {
             println!("Failed to send stop signal: {:?}", e);
         }
@@ -301,7 +301,7 @@ fn create_recording_directory(dir: &str) {
 
 /// Funzione per il rendering del pulsante di attivazione/disattivazione degli strumenti di annotazione
 pub fn render_annotation_toggle_button(ui: &mut egui::Ui, app: &mut MyApp) {
-    let button_label = if app.is_annotation_tools_active() {
+    let button_label = if app.flags.is_annotation_tools_active() {
         "Disable Annotation Tools"
     } else {
         "Enable Annotation Tools"

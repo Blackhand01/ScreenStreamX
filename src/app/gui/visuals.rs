@@ -61,7 +61,7 @@ fn render_capture_area_instructions(ui: &mut egui::Ui) {
 fn handle_area_selection(ui: &mut egui::Ui, app: &mut MyApp) {
     let response = ui.allocate_rect(ui.max_rect(), egui::Sense::click_and_drag());
 
-    if let Some(capture_area) = app.get_capture_area_mut() {
+    if let Some(capture_area) = app.capture.get_capture_area_mut() {
         if response.drag_started() {
             capture_area.drag_state.start_pos = Some(response.interact_pointer_pos().unwrap());
             println!("Drag started at {:?}", capture_area.drag_state.start_pos);
@@ -116,15 +116,15 @@ fn render_fullscreen_button(ui: &mut egui::Ui, app: &mut MyApp) {
     ).clicked() {
         let display = scrap::Display::primary().unwrap();
         let fullscreen_area = CaptureArea::new(0, 0, display.width(), display.height());
-        app.set_capture_area(Some(fullscreen_area));
-        app.set_selecting_area(false); // Esci dalla modalità di selezione
+        app.capture.set_capture_area(Some(fullscreen_area));
+        app.ui_state.set_selecting_area(false); // Esci dalla modalità di selezione
         println!("Fullscreen selected");
     }
 }
 
 /// Mostra il pulsante per confermare la selezione dell'area
 fn render_confirm_selection_button(ui: &mut egui::Ui, app: &mut MyApp) {
-    let is_valid_selection = app.get_capture_area().map_or(false, |area| area.is_valid());
+    let is_valid_selection = app.capture.get_capture_area().map_or(false, |area| area.is_valid());
 
     if is_valid_selection {
         if ui.add_sized(
@@ -136,8 +136,8 @@ fn render_confirm_selection_button(ui: &mut egui::Ui, app: &mut MyApp) {
             )
             .fill(egui::Color32::from_rgb(51, 153, 255)), // Blu per confermare
         ).clicked() {
-            app.set_selecting_area(false); // Esci dalla modalità di selezione
-            println!("Area confirmed: {:?}", app.get_capture_area());
+            app.ui_state.set_selecting_area(false); // Esci dalla modalità di selezione
+            println!("Area confirmed: {:?}", app.capture.get_capture_area());
         }
     }
 }
@@ -153,28 +153,28 @@ fn render_cancel_selection_button(ui: &mut egui::Ui, app: &mut MyApp) {
         )
         .fill(egui::Color32::from_rgb(204, 51, 51)), // Rosso per cancellare
     ).clicked() {
-        app.set_show_confirmation_dialog(true);
+        app.ui_state.set_show_confirmation_dialog(true);
     }
 }
 
 /// Gestisce la finestra di conferma quando si tenta di annullare la selezione
 fn handle_selection_confirmation_dialog(ctx: &egui::Context, app: &mut MyApp) {
-    if app.show_confirmation_dialog() {
+    if app.ui_state.show_confirmation_dialog() {
         egui::Window::new("Are you sure you want to cancel?")
             .collapsible(false)
             .resizable(false)
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
                     if ui.button("No").clicked() {
-                        app.set_show_confirmation_dialog(false);
+                        app.ui_state.set_show_confirmation_dialog(false);
                     }
 
                     if ui.button("Yes").clicked() {
-                        if let Some(capture_area) = app.get_capture_area_mut() {
+                        if let Some(capture_area) = app.capture.get_capture_area_mut() {
                             capture_area.drag_state.reset();
                         }
-                        app.set_selecting_area(false);
-                        app.set_show_confirmation_dialog(false);
+                        app.ui_state.set_selecting_area(false);
+                        app.ui_state.set_show_confirmation_dialog(false);
                         println!("Selection cancelled");
                     }
                 });
