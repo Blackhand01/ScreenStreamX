@@ -40,7 +40,7 @@ pub fn capture_area_panel(ctx: &egui::Context, app: &mut MyApp) {
     egui::CentralPanel::default().show(ctx, |ui| {
         render_capture_area_instructions(ui);
         handle_area_selection(ui, app);
-        render_selection_panel(ctx, ui, app);
+        render_selection_panel(ctx, app);
     });
 
     handle_selection_confirmation_dialog(ctx, app);
@@ -91,7 +91,7 @@ fn handle_area_selection(ui: &mut egui::Ui, app: &mut MyApp) {
 }
 
 /// Rendering del pannello dei pulsanti di selezione
-fn render_selection_panel(ctx: &egui::Context, ui: &mut egui::Ui, app: &mut MyApp) {
+fn render_selection_panel(ctx: &egui::Context, app: &mut MyApp) {
     egui::TopBottomPanel::bottom("selection_panel").show(ctx, |ui| {
         ui.horizontal(|ui| {
             render_fullscreen_button(ui, app);

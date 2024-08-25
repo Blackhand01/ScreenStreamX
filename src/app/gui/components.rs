@@ -12,10 +12,10 @@ pub fn render_caster_ui(ui: &mut egui::Ui, app: &mut MyApp) {
         caster_ui::render_capture_area_button(ui, app);
         caster_ui::render_annotation_toggle_button(ui, app);
         caster_ui::render_multi_monitor_support_button(ui);
-        caster_ui::render_broadcast_button(ui, app);
+        caster_ui::render_broadcast_button(ui, app); // Pulsante per gestire il broadcasting
+        caster_ui::render_record_button(ui, app); // Pulsante per gestire la registrazione
     });
 }
-
 
 /// Funzione principale per il rendering della UI del Receiver
 pub fn render_receiver_ui(ui: &mut egui::Ui, app: &mut MyApp) {
@@ -27,3 +27,4 @@ pub fn render_receiver_ui(ui: &mut egui::Ui, app: &mut MyApp) {
         receiver_ui::render_recording_button(ui, app);
     });
 }
+

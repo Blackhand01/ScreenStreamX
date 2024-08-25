@@ -15,14 +15,16 @@ pub fn initialize() -> Result<(), eframe::Error> {
     )
 }
 
-
 pub struct MyApp {
     is_caster: bool,
     address: String,
     is_annotation_tools_active: bool,
     is_recording: bool,
+    is_broadcasting: bool,
     capture_area: Option<CaptureArea>,
-    stop_tx: Option<mpsc::Sender<()>>,  // Campo privato
+    stop_tx: Option<mpsc::Sender<()>>,  // Campo per la gestione generica del canale di stop
+    broadcast_stop_tx: Option<mpsc::Sender<()>>, // Nuovo campo per la gestione del canale di stop per il broadcasting
+    record_stop_tx: Option<mpsc::Sender<()>>, // Nuovo campo per la gestione del canale di stop per la registrazione
     selecting_area: bool, // Nuovo campo per gestire la modalità di selezione dell'area
     show_confirmation_dialog: bool,  // Nuovo campo per gestire la finestra di conferma
     show_monitor_selection: bool, // Aggiungi questo campo
@@ -40,12 +42,33 @@ impl MyApp {
             address: ip_address,
             is_annotation_tools_active: false,
             is_recording: false,
+            is_broadcasting: false,
             capture_area: Some(CaptureArea::default()), // Inizializza con un'area di cattura vuota
             stop_tx: None,  // Inizialmente nessun canale di stop
+            broadcast_stop_tx: None, // Inizialmente nessun canale di stop per il broadcasting
+            record_stop_tx: None, // Inizialmente nessun canale di stop per la registrazione
             selecting_area: false, // Inizialmente la selezione non è attiva
             show_confirmation_dialog: false, // Inizialmente la finestra di conferma non è visibile
             show_monitor_selection: false, // Inizializza con false
         }
+    }
+
+    // Getter e setter per broadcast_stop_tx
+    pub fn get_broadcast_stop_tx(&self) -> Option<mpsc::Sender<()>> {
+        self.broadcast_stop_tx.clone()
+    }
+
+    pub fn set_broadcast_stop_tx(&mut self, tx: Option<mpsc::Sender<()>>) {
+        self.broadcast_stop_tx = tx;
+    }
+
+    // Getter e setter per record_stop_tx
+    pub fn get_record_stop_tx(&self) -> Option<mpsc::Sender<()>> {
+        self.record_stop_tx.clone()
+    }
+
+    pub fn set_record_stop_tx(&mut self, tx: Option<mpsc::Sender<()>>) {
+        self.record_stop_tx = tx;
     }
 
     // Getter e setter per show_monitor_selection
@@ -81,6 +104,14 @@ impl MyApp {
         self.is_recording = value;
     }
 
+    pub fn is_broadcasting(&self) -> bool {
+        self.is_broadcasting
+    }
+
+    pub fn set_broadcasting(&mut self, value: bool) {
+        self.is_broadcasting = value;
+    }
+
     pub fn get_address(&self) -> &str {
         &self.address
     }
@@ -105,7 +136,6 @@ impl MyApp {
         self.selecting_area = value;
     }
     
-
     pub fn get_capture_area(&self) -> Option<&CaptureArea> {
         self.capture_area.as_ref()
     }
@@ -128,8 +158,6 @@ impl MyApp {
     }
 }
 
-
-
 impl App for MyApp {
     /// Metodo principale di aggiornamento dell'interfaccia utente (ciclo di eventi).
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
@@ -141,5 +169,4 @@ impl App for MyApp {
             central_panel(ctx, self);
         }
     }
-    
 }

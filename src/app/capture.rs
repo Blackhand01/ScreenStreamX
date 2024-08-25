@@ -125,18 +125,21 @@ impl ScreenCapturer {
                 Ok(frame) => {
                     let frame = frame.to_vec();
                     let mut buffer = ImageBuffer::new(self.width as u32, self.height as u32);
-
+    
                     // Converti i dati raw in un'immagine RGBA
                     for (x, y, pixel) in buffer.enumerate_pixels_mut() {
                         let idx = (y as usize * self.width + x as usize) * 4;
                         *pixel = Rgba([frame[idx + 2], frame[idx + 1], frame[idx], 255]);
                     }
-
+    
                     // Se è stata definita un'area di cattura, taglia l'immagine a quell'area.
-                    return match &self.capture_area {
-                        Some(area) => Some(self.crop_frame(&buffer, area)),
-                        None => Some(buffer),
+                    let final_buffer = match &self.capture_area {
+                        Some(area) => self.crop_frame(&buffer, area),
+                        None => buffer,
                     };
+    
+                    // Converte l'ImageBuffer in ScreenCapture prima di restituirlo
+                    return Some(ScreenCapture::from_image_buffer(&final_buffer));
                 }
                 // Se non è pronto, aspetta un po' e riprova.
                 Err(ref e) if e.kind() == WouldBlock => {
@@ -146,8 +149,9 @@ impl ScreenCapturer {
                 Err(_) => return None,
             }
         }
-    }
+    }    
 
+    #[allow(dead_code)]
     fn create_image_buffer(&self, frame: &[u8]) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
         let mut buffer = ImageBuffer::new(self.width as u32, self.height as u32);
         for (x, y, pixel) in buffer.enumerate_pixels_mut() {
