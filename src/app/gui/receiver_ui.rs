@@ -56,6 +56,7 @@ fn handle_recording_button_click(app: &mut MyApp) {
 }
 
 // Funzione per avviare la ricezione della trasmissione
+// Funzione per avviare la ricezione della trasmissione
 fn start_receiving(app: &mut MyApp) {
     println!("Starting receiving...");
     app.set_recording(true);
@@ -68,7 +69,6 @@ fn start_receiving(app: &mut MyApp) {
 
     let (frame_tx, frame_rx) = mpsc::channel();
 
-    // Clonare l'indirizzo prima di passarlo al thread
     let receiver_address = app.get_address().to_string();
 
     let mut window = Window::new(
@@ -76,31 +76,34 @@ fn start_receiving(app: &mut MyApp) {
         1440,
         900,
         WindowOptions {
-            resize: true,      // Consente il ridimensionamento della finestra
-            borderless: false, // Disattiva la modalità senza bordi per avere i controlli standard della finestra (incluso il pulsante di chiusura)
-            title: true,       // Mostra il titolo della finestra (incluso il pulsante di chiusura)
+            resize: true,
+            borderless: false,
+            title: true,
             ..WindowOptions::default()
         },
     ).unwrap_or_else(|e| {
         panic!("{}", e);
     });
 
-    // Avvia il client in un thread separato
     thread::spawn(move || {
         start_client(&receiver_address, recording_flag_clone, move |frame: ScreenCapture| {
-            // Invia il frame attraverso il canale al thread principale
             if frame_tx.send(frame).is_err() {
                 println!("Failed to send frame to main thread, exiting client thread.");
-                return; // Esce dal thread client se l'invio fallisce
-            }        
+                return;
+            }
         });
     });
 
     println!("Receiving thread started");
 
-    // Ciclo principale per aggiornare la finestra
     while *recording_flag.lock().unwrap() && window.is_open() {
         if let Ok(frame) = frame_rx.try_recv() {
+            // Controlla se il frame è un segnale di chiusura
+            if frame.data == vec![0] {
+                println!("Received stop signal from caster, closing window...");
+                break;
+            }
+
             let buffer: Vec<u32> = frame.data.chunks(4).map(|pixel| {
                 let r = pixel[0] as u32;
                 let g = pixel[1] as u32;
@@ -108,7 +111,6 @@ fn start_receiving(app: &mut MyApp) {
                 (r << 16) | (g << 8) | b
             }).collect();
 
-            // Aggiorna la finestra con il buffer ricevuto
             if window.update_with_buffer(&buffer, frame.width as usize, frame.height as usize).is_err() {
                 println!("Failed to update window, stopping.");
                 break;
@@ -116,23 +118,22 @@ fn start_receiving(app: &mut MyApp) {
         }
 
         // Gestione dell'arresto della ricezione
-        if rx.try_recv().is_ok() {
+        if rx.try_recv().is_ok() || !*recording_flag.lock().unwrap() {
             println!("Received stop signal, stopping receiving...");
-            break;  // Esce dal ciclo
+            break;
         }
-        // Aggiungi un breve sleep per evitare che il ciclo consumi troppa CPU
+
         std::thread::sleep(std::time::Duration::from_millis(10));
-        
     }
 
-    
     println!("Closing window as requested.");
-    // Questo assicura che la finestra sia chiusa correttamente
     app.set_recording(false);
-    
 
     println!("Receiving thread exiting");
 }
+
+
+
 
 
 
