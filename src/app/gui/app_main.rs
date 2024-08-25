@@ -24,6 +24,8 @@ pub struct MyApp {
     capture_area: Option<CaptureArea>,
     stop_tx: Option<mpsc::Sender<()>>,  // Campo privato
     selecting_area: bool, // Nuovo campo per gestire la modalità di selezione dell'area
+    show_confirmation_dialog: bool,  // Nuovo campo per gestire la finestra di conferma
+    show_monitor_selection: bool, // Aggiungi questo campo
 }
 
 impl MyApp {
@@ -41,10 +43,20 @@ impl MyApp {
             capture_area: Some(CaptureArea::default()), // Inizializza con un'area di cattura vuota
             stop_tx: None,  // Inizialmente nessun canale di stop
             selecting_area: false, // Inizialmente la selezione non è attiva
+            show_confirmation_dialog: false, // Inizialmente la finestra di conferma non è visibile
+            show_monitor_selection: false, // Inizializza con false
         }
     }
 
-    // Getter e setter per i vari stati dell'applicazione
+    // Getter e setter per show_monitor_selection
+    pub fn show_monitor_selection(&self) -> bool {
+        self.show_monitor_selection
+    }
+
+    pub fn set_show_monitor_selection(&mut self, value: bool) {
+        self.show_monitor_selection = value;
+    }
+
     pub fn is_caster(&self) -> bool {
         self.is_caster
     }
@@ -92,6 +104,7 @@ impl MyApp {
     pub fn set_selecting_area(&mut self, value: bool) {
         self.selecting_area = value;
     }
+    
 
     pub fn get_capture_area(&self) -> Option<&CaptureArea> {
         self.capture_area.as_ref()
@@ -103,6 +116,15 @@ impl MyApp {
 
     pub fn set_capture_area(&mut self, area: Option<CaptureArea>) {
         self.capture_area = area;
+        
+    }
+
+    pub fn show_confirmation_dialog(&self) -> bool {
+        self.show_confirmation_dialog
+    }
+
+    pub fn set_show_confirmation_dialog(&mut self, value: bool) {
+        self.show_confirmation_dialog = value;
     }
 }
 

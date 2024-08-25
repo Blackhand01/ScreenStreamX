@@ -77,6 +77,16 @@ impl CaptureArea {
     pub fn as_rect(&self) -> (usize, usize, usize, usize) {
         (self.x, self.y, self.width, self.height)
     }
+    
+     /// Elimina l'area di cattura, rendendola non valida.
+     pub fn clear(&mut self) {
+        self.x = 0;
+        self.y = 0;
+        self.width = 0;
+        self.height = 0;
+        self.drag_state.reset();
+        println!("Capture area cleared.");
+    }
 }
 
 
@@ -116,18 +126,19 @@ impl ScreenCapturer {
                     let frame = frame.to_vec();
                     let mut buffer = ImageBuffer::new(self.width as u32, self.height as u32);
 
+                    // Converti i dati raw in un'immagine RGBA
                     for (x, y, pixel) in buffer.enumerate_pixels_mut() {
                         let idx = (y as usize * self.width + x as usize) * 4;
                         *pixel = Rgba([frame[idx + 2], frame[idx + 1], frame[idx], 255]);
                     }
 
-                    let image_buffer = match &self.capture_area {
-                        Some(area) => self.crop_frame(&buffer, area),
-                        None => buffer,
+                    // Se è stata definita un'area di cattura, taglia l'immagine a quell'area.
+                    return match &self.capture_area {
+                        Some(area) => Some(self.crop_frame(&buffer, area)),
+                        None => Some(buffer),
                     };
-
-                    return Some(ScreenCapture::from_image_buffer(&image_buffer));
                 }
+                // Se non è pronto, aspetta un po' e riprova.
                 Err(ref e) if e.kind() == WouldBlock => {
                     thread::sleep(Duration::from_millis(10));
                     continue;
@@ -135,6 +146,15 @@ impl ScreenCapturer {
                 Err(_) => return None,
             }
         }
+    }
+
+    fn create_image_buffer(&self, frame: &[u8]) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
+        let mut buffer = ImageBuffer::new(self.width as u32, self.height as u32);
+        for (x, y, pixel) in buffer.enumerate_pixels_mut() {
+            let idx = (y as usize * self.width + x as usize) * 4;
+            *pixel = Rgba([frame[idx + 2], frame[idx + 1], frame[idx], 255]);
+        }
+        buffer
     }
 
     /// Taglia l'immagine catturata all'area specificata.
@@ -148,4 +168,12 @@ impl ScreenCapturer {
         }
         cropped
     }
+
+    /// Elimina l'area di cattura, ripristinando la cattura all'intero schermo.
+    pub fn clear_capture_area(&mut self) {
+        self.capture_area = None;
+        println!("Capture area cleared. Capturing entire screen.");
+    }
+
+    
 }
