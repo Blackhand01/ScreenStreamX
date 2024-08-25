@@ -56,6 +56,16 @@ impl CaptureArea {
     pub fn as_rect(&self) -> (usize, usize, usize, usize) {
         (self.x, self.y, self.width, self.height)
     }
+    
+     /// Elimina l'area di cattura, rendendola non valida.
+     pub fn clear(&mut self) {
+        self.x = 0;
+        self.y = 0;
+        self.width = 0;
+        self.height = 0;
+        self.drag_state.reset();
+        println!("Capture area cleared.");
+    }
 }
 
 
@@ -129,4 +139,12 @@ impl ScreenCapturer {
         }
         cropped
     }
+
+    /// Elimina l'area di cattura, ripristinando la cattura all'intero schermo.
+    pub fn clear_capture_area(&mut self) {
+        self.capture_area = None;
+        println!("Capture area cleared. Capturing entire screen.");
+    }
+
+    
 }
