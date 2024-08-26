@@ -3,7 +3,6 @@
 use eframe::egui;
 use crate::app::capture::{CaptureArea, ScreenCapturer};
 use crate::utils::annotations::toggle_annotation_tools;
-use crate::utils::multi_monitor::multi_monitor_support;
 use std::sync::{mpsc, Arc, Mutex};
 use std::{thread, fs};
 use std::process::{Command, Stdio};
@@ -101,7 +100,7 @@ fn handle_record_button_click(app: &mut MyApp) {
 }
 
 /// Funzione per avviare la trasmissione dello schermo
-fn start_broadcast(app: &mut MyApp) {
+pub fn start_broadcast(app: &mut MyApp) {
     println!("Starting broadcast...");
     app.flags.set_broadcasting(true);
 
@@ -159,7 +158,7 @@ fn start_record(app: &mut MyApp) {
 }
 
 /// Funzione per fermare la trasmissione dello schermo
-fn stop_broadcast(app: &mut MyApp) {
+pub fn stop_broadcast(app: &mut MyApp) {
     println!("Stopping broadcast...");
     app.flags.set_broadcasting(false);
 
@@ -186,7 +185,7 @@ fn stop_broadcast(app: &mut MyApp) {
 }
 
 /// Funzione per fermare la registrazione dello schermo
-fn stop_record(app: &mut MyApp) {
+pub fn stop_record(app: &mut MyApp) {
     println!("Stopping recording...");
     app.flags.set_recording(false);
 
@@ -198,7 +197,7 @@ fn stop_record(app: &mut MyApp) {
 }
 
 /// Funzione per avviare il thread per la trasmissione dello schermo
-fn start_broadcast_thread(
+pub fn start_broadcast_thread(
     broadcast_flag: Arc<Mutex<bool>>,
     rx: mpsc::Receiver<()>,
     capture_area: Option<CaptureArea>,
@@ -249,7 +248,7 @@ fn start_broadcast_thread(
 }
 
 /// Funzione per avviare il thread per la registrazione dello schermo
-fn start_record_thread(
+pub fn start_record_thread(
     record_flag: Arc<Mutex<bool>>,
     rx: mpsc::Receiver<()>,
     capture_area: Option<CaptureArea>,
@@ -316,7 +315,7 @@ fn sync_frame_rate(start_time: Instant) {
 }
 
 /// Ottieni le dimensioni dell'area di cattura
-fn get_capture_dimensions(capture_area: &Option<CaptureArea>) -> (usize, usize) {
+pub fn get_capture_dimensions(capture_area: &Option<CaptureArea>) -> (usize, usize) {
     match capture_area {
         Some(area) => (area.width, area.height),
         None => {
@@ -327,7 +326,7 @@ fn get_capture_dimensions(capture_area: &Option<CaptureArea>) -> (usize, usize) 
 }
 
 /// Crea la directory per la registrazione se non esiste
-fn create_recording_directory(dir: &str) {
+pub fn create_recording_directory(dir: &str) {
     fs::create_dir_all(dir).expect("Failed to create recording directory");
 }
 
@@ -354,8 +353,7 @@ pub fn render_annotation_toggle_button(ui: &mut egui::Ui, app: &mut MyApp) {
     ui.add_space(10.0);
 }
 
-/// Funzione per il rendering del pulsante di supporto multi-monitor
-pub fn render_multi_monitor_support_button(ui: &mut egui::Ui) {
+pub fn render_multi_monitor_support_button(ui: &mut egui::Ui, app: &mut MyApp) {
     if ui.add_sized(
         [200.0, 40.0],
         egui::Button::new(
@@ -366,7 +364,7 @@ pub fn render_multi_monitor_support_button(ui: &mut egui::Ui) {
         .fill(egui::Color32::from_rgb(102, 204, 255)), // Azzurro per il supporto multi-monitor
     ).clicked() {
         println!("Multi-Monitor Support clicked");
-        multi_monitor_support();
+        app.ui_state.set_showing_monitor_selection(true); // Mostra la selezione monitor
     }
-    ui.add_space(10.0);
 }
+

@@ -2,11 +2,65 @@ use eframe::egui;
 use super::app_main::MyApp;
 use super::components::{render_caster_ui, render_receiver_ui};
 use crate::app::capture::CaptureArea;
+use crate::utils::multi_monitor::get_available_monitors;
+
+/// Pannello di selezione del monitor con un pulsante "Indietro" migliorato e pulsanti accattivanti per la selezione del monitor.
+pub fn monitor_selection_panel(ctx: &egui::Context, app: &mut MyApp) {
+    egui::CentralPanel::default().show(ctx, |ui| {
+        // Pulsante "Indietro" in alto a sinistra
+        egui::TopBottomPanel::top("back_button_panel").show_inside(ui, |ui| {
+            ui.horizontal(|ui| {
+                if ui.add_sized(
+                    [120.0, 45.0],  // Dimensione aumentata per maggiore visibilità
+                    egui::Button::new(
+                        egui::RichText::new("⬅ Back")
+                            .color(egui::Color32::WHITE)
+                            .strong(),
+                    )
+                    .fill(egui::Color32::from_rgba_unmultiplied(255, 140, 0, 200))  // Gradiente arancione
+                    .rounding(10.0)  // Arrotondamento agli angoli
+                    .stroke(egui::Stroke::new(2.0, egui::Color32::WHITE)),  // Contorno bianco
+                ).clicked() {
+                    app.ui_state.set_showing_monitor_selection(false);  // Torna al menu principale
+                }
+            });
+        });
+
+        // Menu di selezione dei monitor al centro
+        ui.vertical_centered(|ui| {
+            ui.heading(egui::RichText::new("Select Monitor").strong().size(24.0));
+            ui.add_space(20.0);
+
+            let monitors = get_available_monitors();
+            for (index, display) in monitors.iter().enumerate() {
+                let monitor_name = format!("Monitor {}: {}x{}", index + 1, display.width(), display.height());
+
+                if ui.add_sized(
+                    [300.0, 60.0],  // Dimensione aumentata per un impatto visivo maggiore
+                    egui::Button::new(
+                        egui::RichText::new(&monitor_name)
+                            .color(egui::Color32::WHITE)
+                            .strong(),
+                    )
+                    .fill(egui::Color32::from_rgba_unmultiplied(70, 130, 180, 220))  // Colore blu accattivante
+                    .rounding(10.0)  // Angoli arrotondati
+                    .stroke(egui::Stroke::new(2.0, egui::Color32::WHITE)),  // Contorno bianco
+                ).clicked() {
+                    app.capture.set_capture_area(Some(CaptureArea::new(0, 0, display.width(), display.height())));
+                    app.ui_state.set_showing_monitor_selection(false);  // Torna al menu principale dopo la selezione
+                }
+
+                ui.add_space(15.0);  // Spazio tra i pulsanti
+            }
+        });
+    });
+}
 
 /// Configura l'aspetto visivo dell'interfaccia utente
 pub fn configure_visuals(ctx: &egui::Context) {
     let mut visuals = egui::Visuals::dark();
 
+    // Configurazione dell'aspetto generale
     set_window_visuals(&mut visuals);
     set_text_visuals(&mut visuals);
     set_widget_visuals(&mut visuals);
@@ -16,26 +70,30 @@ pub fn configure_visuals(ctx: &egui::Context) {
 
 /// Configura le ombre e gli angoli delle finestre
 fn set_window_visuals(visuals: &mut egui::Visuals) {
-    visuals.window_shadow.blur = 10.0;
+    visuals.window_shadow.blur = 15.0;
     visuals.window_shadow.offset = egui::Vec2::new(2.0, 2.0);
-    visuals.window_rounding = egui::Rounding::same(10.0);
+    visuals.window_rounding = egui::Rounding::same(12.0);
 }
 
 /// Configura l'aspetto del testo
 fn set_text_visuals(visuals: &mut egui::Visuals) {
-    visuals.override_text_color = Some(egui::Color32::from_gray(220));
+    visuals.override_text_color = Some(egui::Color32::from_gray(230));
 }
 
-/// Configura i colori di sfondo dei widget in base al loro stato
+/// Configura i colori e le ombre dei widget in base al loro stato
 fn set_widget_visuals(visuals: &mut egui::Visuals) {
-    visuals.widgets.noninteractive.bg_fill = egui::Color32::from_rgb(30, 30, 30);
-    visuals.widgets.inactive.bg_fill = egui::Color32::from_rgb(50, 50, 50);
-    visuals.widgets.hovered.bg_fill = egui::Color32::from_rgb(60, 60, 60);
-    visuals.widgets.active.bg_fill = egui::Color32::from_rgb(80, 80, 80);
+    visuals.widgets.noninteractive.bg_fill = egui::Color32::from_rgb(40, 40, 40);
+    visuals.widgets.inactive.bg_fill = egui::Color32::from_rgb(60, 60, 60);
+    visuals.widgets.hovered.bg_fill = egui::Color32::from_rgb(80, 80, 80);
+    visuals.widgets.active.bg_fill = egui::Color32::from_rgb(100, 100, 100);
     visuals.widgets.open.bg_fill = egui::Color32::from_rgb(70, 70, 70);
+
+    visuals.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_gray(70));
+    visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.5, egui::Color32::WHITE);
+    visuals.widgets.active.bg_stroke = egui::Stroke::new(2.0, egui::Color32::WHITE);
 }
 
-/// Configura l'interfaccia di selezione dell'area
+/// Pannello di selezione dell'area di cattura
 pub fn capture_area_panel(ctx: &egui::Context, app: &mut MyApp) {
     egui::CentralPanel::default().show(ctx, |ui| {
         render_capture_area_instructions(ui);
@@ -90,7 +148,7 @@ fn handle_area_selection(ui: &mut egui::Ui, app: &mut MyApp) {
     }
 }
 
-/// Rendering del pannello dei pulsanti di selezione
+/// Pannello inferiore con pulsanti per la selezione dell'area
 fn render_selection_panel(ctx: &egui::Context, app: &mut MyApp) {
     egui::TopBottomPanel::bottom("selection_panel").show(ctx, |ui| {
         ui.horizontal(|ui| {

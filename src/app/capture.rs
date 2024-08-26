@@ -21,9 +21,9 @@ impl ScreenCapture {
         ScreenCapture { width, height, data }
     }
 
-    pub fn into_image_buffer(self) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
-        ImageBuffer::from_raw(self.width, self.height, self.data).expect("Errore nella conversione in ImageBuffer")
-    }
+    // pub fn into_image_buffer(self) -> ImageBuffer<Rgba<u8>, Vec<u8>> {
+    //     ImageBuffer::from_raw(self.width, self.height, self.data).expect("Errore nella conversione in ImageBuffer")
+    // }
 }
 
 #[derive(Clone, Debug, Default)]
@@ -73,20 +73,20 @@ impl CaptureArea {
         self.width > 0 && self.height > 0
     }
 
-    /// Converte l'area di cattura in un rettangolo.
-    pub fn as_rect(&self) -> (usize, usize, usize, usize) {
-        (self.x, self.y, self.width, self.height)
-    }
+    // /// Converte l'area di cattura in un rettangolo.
+    // pub fn as_rect(&self) -> (usize, usize, usize, usize) {
+    //     (self.x, self.y, self.width, self.height)
+    // }
     
-     /// Elimina l'area di cattura, rendendola non valida.
-     pub fn clear(&mut self) {
-        self.x = 0;
-        self.y = 0;
-        self.width = 0;
-        self.height = 0;
-        self.drag_state.reset();
-        println!("Capture area cleared.");
-    }
+    //  /// Elimina l'area di cattura, rendendola non valida.
+    //  pub fn clear(&mut self) {
+    //     self.x = 0;
+    //     self.y = 0;
+    //     self.width = 0;
+    //     self.height = 0;
+    //     self.drag_state.reset();
+    //     println!("Capture area cleared.");
+    // }
 }
 
 
@@ -173,11 +173,11 @@ impl ScreenCapturer {
         cropped
     }
 
-    /// Elimina l'area di cattura, ripristinando la cattura all'intero schermo.
-    pub fn clear_capture_area(&mut self) {
-        self.capture_area = None;
-        println!("Capture area cleared. Capturing entire screen.");
-    }
+    // /// Elimina l'area di cattura, ripristinando la cattura all'intero schermo.
+    // pub fn clear_capture_area(&mut self) {
+    //     self.capture_area = None;
+    //     println!("Capture area cleared. Capturing entire screen.");
+    // }
 
     
 }
