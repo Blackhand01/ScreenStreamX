@@ -3,7 +3,7 @@ use eframe::{egui, App, CreationContext};
 use local_ip_address::local_ip;
 use crate::app::capture::CaptureArea;
 
-use super::visuals::{configure_visuals, central_panel, capture_area_panel};
+use super::visuals::{configure_visuals, central_panel, capture_area_panel, monitor_selection_panel};
 use std::sync::mpsc;
 
 pub fn initialize() -> Result<(), eframe::Error> {
@@ -130,13 +130,14 @@ impl UIState {
         self.show_confirmation_dialog = value;
     }
 
-    pub fn show_monitor_selection(&self) -> bool {
+    pub fn is_showing_monitor_selection(&self) -> bool {
         self.show_monitor_selection
     }
 
-    pub fn set_show_monitor_selection(&mut self, value: bool) {
+    pub fn set_showing_monitor_selection(&mut self, value: bool) {
         self.show_monitor_selection = value;
     }
+
 }
 
 /// Flag per la gestione di stati come broadcasting, recording, ecc.
@@ -217,13 +218,14 @@ impl MyApp {
     }
 }
 
+
 impl App for MyApp {
-    /// Metodo principale di aggiornamento dell'interfaccia utente (ciclo di eventi).
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         if self.ui_state.is_selecting_area() {
             capture_area_panel(ctx, self);
+        } else if self.ui_state.is_showing_monitor_selection() {
+            monitor_selection_panel(ctx, self);  // Mostra il pannello di selezione dei monitor
         } else {
-            // UI normale
             configure_visuals(ctx);
             central_panel(ctx, self);
         }

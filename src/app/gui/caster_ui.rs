@@ -3,7 +3,6 @@
 use eframe::egui;
 use crate::app::capture::{CaptureArea, ScreenCapturer};
 use crate::utils::annotations::toggle_annotation_tools;
-use crate::utils::multi_monitor::multi_monitor_support;
 use std::sync::{mpsc, Arc, Mutex};
 use std::{thread, fs};
 use std::process::{Command, Stdio};
@@ -322,8 +321,7 @@ pub fn render_annotation_toggle_button(ui: &mut egui::Ui, app: &mut MyApp) {
     ui.add_space(10.0);
 }
 
-/// Funzione per il rendering del pulsante di supporto multi-monitor
-pub fn render_multi_monitor_support_button(ui: &mut egui::Ui) {
+pub fn render_multi_monitor_support_button(ui: &mut egui::Ui, app: &mut MyApp) {
     if ui.add_sized(
         [200.0, 40.0],
         egui::Button::new(
@@ -334,7 +332,7 @@ pub fn render_multi_monitor_support_button(ui: &mut egui::Ui) {
         .fill(egui::Color32::from_rgb(102, 204, 255)), // Azzurro per il supporto multi-monitor
     ).clicked() {
         println!("Multi-Monitor Support clicked");
-        multi_monitor_support();
+        app.ui_state.set_showing_monitor_selection(true); // Mostra la selezione monitor
     }
-    ui.add_space(10.0);
 }
+

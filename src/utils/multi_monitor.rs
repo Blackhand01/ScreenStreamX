@@ -1,3 +1,6 @@
-pub fn multi_monitor_support() {
-    // Implementa la logica per supportare più monitor
+// src/utils/multi_monitor.rs
+use scrap::Display;
+
+pub fn get_available_monitors() -> Vec<Display> {
+    Display::all().expect("Failed to get displays")
 }
