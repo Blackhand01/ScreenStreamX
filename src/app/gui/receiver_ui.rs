@@ -8,7 +8,6 @@ use crate::app::capture::ScreenCapture;
 use super::app_main::MyApp;
 use minifb::{Window, WindowOptions};
 
-
 // Funzione per il rendering dell'input per l'indirizzo del Caster
 pub fn render_receiver_address_input(ui: &mut egui::Ui, app: &mut MyApp) {
     ui.vertical_centered(|ui| {
@@ -55,7 +54,6 @@ fn handle_recording_button_click(app: &mut MyApp) {
     }
 }
 
-// Funzione per avviare la ricezione della trasmissione
 // Funzione per avviare la ricezione della trasmissione
 fn start_receiving(app: &mut MyApp) {
     println!("Starting receiving...");
@@ -131,7 +129,6 @@ fn start_receiving(app: &mut MyApp) {
 
     println!("Receiving thread exiting");
 }
-
 
 
 

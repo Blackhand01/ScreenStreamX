@@ -1,40 +1,38 @@
-// src/app/gui/caster_ui.rs
-
 use eframe::egui;
 use crate::app::capture::ScreenCapturer;
 use crate::utils::annotations::toggle_annotation_tools;
 use crate::utils::multi_monitor::multi_monitor_support;
 use std::sync::{mpsc, Arc, Mutex};
 use std::thread;
-use crate::app::network::start_server; // Importa la funzione per avviare il server
-use super::app_main::MyApp;
-use std::net::{TcpListener, TcpStream};
+use std::net::{TcpListener, TcpStream, Shutdown};
 use std::io::Write;
 use std::time::Duration;
 use lazy_static::lazy_static;
+use super::app_main::MyApp;
 
 lazy_static! {
     static ref RECEIVERS: Arc<Mutex<Vec<TcpStream>>> = Arc::new(Mutex::new(Vec::new()));
+    static ref LISTENER: Arc<Mutex<Option<TcpListener>>> = Arc::new(Mutex::new(None));
 }
 
-
-// Funzione per il rendering del pulsante di selezione dell'area di cattura
 pub fn render_capture_area_button(ui: &mut egui::Ui, app: &mut MyApp) {
     if ui.add_sized(
         [200.0, 40.0],
         egui::Button::new(
             egui::RichText::new("Select Capture Area")
                 .color(egui::Color32::WHITE)
-                .strong()
-        ).fill(egui::Color32::from_rgb(255, 153, 102))
-    ).clicked() {
+                .strong(),
+        )
+        .fill(egui::Color32::from_rgb(255, 153, 102)),
+    )
+    .clicked()
+    {
         println!("Select Capture Area clicked");
         app.set_selecting_area(true);
     }
     ui.add_space(10.0);
 }
 
-// Funzione per il rendering del pulsante di avvio/arresto della trasmissione
 pub fn render_broadcast_button(ui: &mut egui::Ui, app: &mut MyApp) {
     let button_label = if app.is_recording() {
         "Stop Broadcasting"
@@ -48,19 +46,22 @@ pub fn render_broadcast_button(ui: &mut egui::Ui, app: &mut MyApp) {
         egui::Color32::from_rgb(204, 51, 51)
     };
 
-    if ui.add_sized(
-        [200.0, 40.0],
-        egui::Button::new(
-            egui::RichText::new(button_label)
-                .color(egui::Color32::WHITE)
-                .strong()
-        ).fill(button_color)
-    ).clicked() {
+    if ui
+        .add_sized(
+            [200.0, 40.0],
+            egui::Button::new(
+                egui::RichText::new(button_label)
+                    .color(egui::Color32::WHITE)
+                    .strong(),
+            )
+            .fill(button_color),
+        )
+        .clicked()
+    {
         handle_broadcast_button_click(app);
     }
 }
 
-// Gestione del clic sul pulsante di avvio/arresto della trasmissione
 fn handle_broadcast_button_click(app: &mut MyApp) {
     if app.is_recording() {
         stop_broadcast(app);
@@ -68,8 +69,6 @@ fn handle_broadcast_button_click(app: &mut MyApp) {
         start_broadcast(app);
     }
 }
-
-// Funzione per avviare la trasmissione dello schermo
 
 fn start_broadcast(app: &mut MyApp) {
     println!("Starting broadcast...");
@@ -82,40 +81,44 @@ fn start_broadcast(app: &mut MyApp) {
     let (tx, rx) = mpsc::channel();
     app.set_stop_tx(Some(tx));
 
-    let listener = TcpListener::bind("0.0.0.0:8080").expect("Failed to bind to address");
+    // Avvio del listener (se non già attivo)
+    if LISTENER.lock().unwrap().is_none() {
+        let listener = TcpListener::bind("0.0.0.0:8080").expect("Failed to bind to address");
+        *LISTENER.lock().unwrap() = Some(listener.try_clone().unwrap());
+
+        thread::spawn(move || {
+            for stream in listener.incoming() {
+                match stream {
+                    Ok(stream) => {
+                        println!("Receiver connected.");
+                        RECEIVERS.lock().unwrap().push(stream);
+                    }
+                    Err(e) => {
+                        println!("Failed to accept connection: {:?}", e);
+                        break;
+                    }
+                }
+            }
+            println!("Listener thread exiting.");
+        });
+    }
 
     thread::spawn(move || {
         println!("Broadcast thread started");
 
         let mut screen_capturer = ScreenCapturer::new(capture_area);
 
-        // Thread per accettare nuove connessioni
-        let listener_thread = thread::spawn(move || {
-            for stream in listener.incoming() {
-                match stream {
-                    Ok(stream) => {
-                        println!("Receiver connected.");
-                        RECEIVERS.lock().unwrap().push(stream);  // Aggiungi il receiver connesso
-                    }
-                    Err(e) => {
-                        println!("Failed to accept connection: {:?}", e);
-                    }
-                }
-            }
-        });
-
-        // Thread principale per catturare e trasmettere i frame
         while *recording_flag_clone.lock().unwrap() {
             if rx.try_recv().is_ok() {
                 println!("Received stop signal, stopping broadcast...");
-                *recording_flag_clone.lock().unwrap() = false;
                 break;
             }
 
             if let Some(frame) = screen_capturer.capture_frame() {
+                println!("Captured a frame, preparing to send...");
+
                 let serialized_frame = bincode::serialize(&frame).expect("Failed to serialize frame");
 
-                // Trasmettiamo il frame a tutti i receiver connessi
                 let mut receivers = RECEIVERS.lock().unwrap();
                 receivers.retain(|mut stream| {
                     let length = serialized_frame.len() as u32;
@@ -131,6 +134,7 @@ fn start_broadcast(app: &mut MyApp) {
                         return false;
                     }
 
+                    println!("Frame sent to receiver.");
                     true // Mantieni la connessione attiva
                 });
             } else {
@@ -141,6 +145,8 @@ fn start_broadcast(app: &mut MyApp) {
         }
 
         println!("Broadcast thread exiting");
+
+        // Non chiudiamo il listener qui, in modo che rimanga attivo per future connessioni
     });
 }
 
@@ -148,29 +154,32 @@ fn stop_broadcast(app: &mut MyApp) {
     println!("Stopping broadcast...");
     app.set_recording(false);
 
-    if let Some(tx) = app.get_stop_tx() {
-        // Invia un segnale di chiusura a tutti i receiver connessi
-        let mut receivers = RECEIVERS.lock().unwrap();
-        receivers.retain(|mut stream| {
-            if stream.write_all(&[0]).is_err() { // Usa un segnale speciale per indicare la chiusura
-                println!("Failed to send stop signal to receiver.");
-                return false;
-            }
-            true
-        });
+    // Invia il segnale di chiusura a tutti i receiver connessi
+    let mut receivers = RECEIVERS.lock().unwrap();
+    for stream in receivers.iter_mut() {
+        if let Err(e) = stream.write_all(&[0]) { // Segnale speciale per indicare la chiusura
+            println!("Failed to send stop signal to receiver: {:?}", e);
+        } else {
+            println!("Stop signal sent to receiver and connection closed.");
+        }
 
-        if tx.send(()).is_err() {
-            println!("Failed to send stop signal via mpsc channel.");
+        if let Err(e) = stream.shutdown(Shutdown::Both) {
+            println!("Failed to shutdown receiver connection: {:?}", e);
         }
     }
+    receivers.clear();
+    println!("All receivers disconnected.");
+
+    // Invia un segnale di stop al thread di broadcast
+    if let Some(tx) = app.get_stop_tx() {
+        if let Err(e) = tx.send(()) {
+            println!("Failed to send stop signal via mpsc channel: {:?}", e);
+        }
+    }
+
+    // Non chiudiamo il listener, quindi i receiver possono riconnettersi
 }
 
-
-
-
-
-
-// Funzione per il rendering del pulsante di attivazione/disattivazione degli strumenti di annotazione
 pub fn render_annotation_toggle_button(ui: &mut egui::Ui, app: &mut MyApp) {
     let button_label = if app.is_annotation_tools_active() {
         "Disable Annotation Tools"
@@ -178,30 +187,37 @@ pub fn render_annotation_toggle_button(ui: &mut egui::Ui, app: &mut MyApp) {
         "Enable Annotation Tools"
     };
 
-    if ui.add_sized(
-        [200.0, 40.0],
-        egui::Button::new(
-            egui::RichText::new(button_label)
-                .color(egui::Color32::WHITE)
-                .strong()
-        ).fill(egui::Color32::from_rgb(153, 0, 153))
-    ).clicked() {
+    if ui
+        .add_sized(
+            [200.0, 40.0],
+            egui::Button::new(
+                egui::RichText::new(button_label)
+                    .color(egui::Color32::WHITE)
+                    .strong(),
+            )
+            .fill(egui::Color32::from_rgb(153, 0, 153)),
+        )
+        .clicked()
+    {
         println!("Toggle Annotation Tools clicked");
         toggle_annotation_tools(app);
     }
     ui.add_space(10.0);
 }
 
-// Funzione per il rendering del pulsante di supporto multi-monitor
 pub fn render_multi_monitor_support_button(ui: &mut egui::Ui) {
-    if ui.add_sized(
-        [200.0, 40.0],
-        egui::Button::new(
-            egui::RichText::new("Multi-Monitor Support")
-                .color(egui::Color32::WHITE)
-                .strong()
-        ).fill(egui::Color32::from_rgb(102, 204, 255))
-    ).clicked() {
+    if ui
+        .add_sized(
+            [200.0, 40.0],
+            egui::Button::new(
+                egui::RichText::new("Multi-Monitor Support")
+                    .color(egui::Color32::WHITE)
+                    .strong(),
+            )
+            .fill(egui::Color32::from_rgb(102, 204, 255)),
+        )
+        .clicked()
+    {
         println!("Multi-Monitor Support clicked");
         multi_monitor_support();
     }
