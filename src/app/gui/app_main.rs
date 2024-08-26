@@ -1,10 +1,12 @@
 // src/app/gui/app_main.rs
 use eframe::{egui, App, CreationContext};
 use local_ip_address::local_ip;
-use crate::app::capture::CaptureArea;
-
+use crate::app::{capture::CaptureArea, hotkey_module::HotkeyAction};
+use crate::app::hotkey_module::HotkeySettings;
+use crate::app::gui::caster_ui;  // Importiamo correttamente il modulo caster_ui per utilizzare le funzioni di trasmissione
 use super::visuals::{configure_visuals, central_panel, capture_area_panel, monitor_selection_panel};
 use std::sync::mpsc;
+use std::sync::{Arc, Mutex};
 
 pub fn initialize() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions::default();
@@ -14,7 +16,6 @@ pub fn initialize() -> Result<(), eframe::Error> {
         Box::new(|cc| Ok(Box::new(MyApp::new(cc)))),
     )
 }
-
 /// Stato del network, incluse informazioni su indirizzi e canali di comunicazione.
 pub struct NetworkState {
     address: String,
@@ -189,6 +190,7 @@ pub struct MyApp {
     pub capture: CaptureState,
     pub ui_state: UIState,
     pub flags: AppFlags,
+    pub hotkeys: HotkeySettings,
 }
 
 /// Enum per gestire la modalità dell'app (Caster o Receiver).
@@ -199,12 +201,15 @@ pub enum AppMode {
 
 impl MyApp {
     pub fn new(_cc: &CreationContext<'_>) -> Self {
+        let hotkeys = HotkeySettings::new().expect("Failed to initialize hotkeys");
+
         Self {
             mode: AppMode::Receiver,
             network: NetworkState::new(),
             capture: CaptureState::new(),
             ui_state: UIState::new(),
             flags: AppFlags::new(),
+            hotkeys,
         }
     }
 
@@ -216,6 +221,99 @@ impl MyApp {
     pub fn is_caster(&self) -> bool {
         matches!(self.mode, AppMode::Caster)
     }
+
+    // Metodo per avviare la trasmissione
+    pub fn start_broadcast(&mut self) {
+        println!("Starting broadcast...");
+        self.flags.set_broadcasting(true);
+
+        let capture_area = self.capture.get_capture_area().cloned().filter(|area| area.is_valid());
+        let broadcast_flag = Arc::new(Mutex::new(true));
+
+        let (tx, rx) = mpsc::channel();
+        self.network.set_broadcast_stop_tx(Some(tx));
+
+        std::thread::spawn(move || {
+            caster_ui::start_broadcast_thread(broadcast_flag, rx, capture_area);
+        });
+    }
+
+    // Metodo per fermare la trasmissione
+    pub fn stop_broadcast(&mut self) {
+        println!("Stopping broadcast...");
+        self.flags.set_broadcasting(false);
+
+        if let Some(tx) = self.network.get_broadcast_stop_tx() {
+            if let Err(e) = tx.send(()) {
+                println!("Failed to send stop signal: {:?}", e);
+            }
+        }
+    }
+
+    // Metodo per avviare la registrazione
+    pub fn start_recording(&mut self) {
+        println!("Starting recording...");
+        self.flags.set_recording(true);
+
+        let capture_area = self.capture.get_capture_area().cloned().filter(|area| area.is_valid());
+        let record_flag = Arc::new(Mutex::new(true));
+
+        let (tx, rx) = mpsc::channel();
+        self.network.set_record_stop_tx(Some(tx));
+
+        let (width, height) = caster_ui::get_capture_dimensions(&capture_area);
+        caster_ui::create_recording_directory("recordings");
+
+        std::thread::spawn(move || {
+            caster_ui::start_record_thread(record_flag, rx, capture_area, width, height);
+        });
+    }
+
+    // Metodo per fermare la registrazione
+    pub fn stop_recording(&mut self) {
+        println!("Stopping recording...");
+        self.flags.set_recording(false);
+
+        if let Some(tx) = self.network.get_record_stop_tx() {
+            if let Err(e) = tx.send(()) {
+                println!("Failed to send stop signal: {:?}", e);
+            }
+        }
+    }
+
+    fn handle_hotkey_action(&mut self, action: HotkeyAction) {
+        match action {
+            HotkeyAction::StartPauseBroadcast => {
+                if self.flags.is_broadcasting() {
+                    self.stop_broadcast();
+                } else {
+                    self.start_broadcast();
+                }
+            }
+            HotkeyAction::StartStopRecording => {
+                if self.flags.is_recording() {
+                    self.stop_recording();
+                } else {
+                    self.start_recording();
+                }
+            }
+            HotkeyAction::LockUnlockScreen => {
+                println!("Lock/Unlock Screen via hotkey (Not implemented yet)");
+            }
+            HotkeyAction::ToggleAnnotation => {
+                self.flags.set_annotation_tools_active(!self.flags.is_annotation_tools_active());
+            }
+            HotkeyAction::QuickCaptureSelection => {
+                self.ui_state.set_selecting_area(true);
+            }
+            HotkeyAction::EndSession => {
+                std::process::exit(0);
+            }
+            HotkeyAction::SwitchMonitor => {
+                self.ui_state.set_showing_monitor_selection(true);
+            }
+        }
+    }
 }
 
 
@@ -224,10 +322,17 @@ impl App for MyApp {
         if self.ui_state.is_selecting_area() {
             capture_area_panel(ctx, self);
         } else if self.ui_state.is_showing_monitor_selection() {
-            monitor_selection_panel(ctx, self);  // Mostra il pannello di selezione dei monitor
+            monitor_selection_panel(ctx, self);
         } else {
             configure_visuals(ctx);
             central_panel(ctx, self);
+        }
+
+        // Gestione degli eventi delle hotkeys
+        if let Ok(event) = global_hotkey::GlobalHotKeyEvent::receiver().try_recv() {
+            if let Some(action) = self.hotkeys.hotkey_map.get(&event.id).cloned() {
+                self.handle_hotkey_action(action);
+            }
         }
     }
 }

@@ -94,7 +94,7 @@ fn handle_record_button_click(app: &mut MyApp) {
 }
 
 /// Funzione per avviare la trasmissione dello schermo
-fn start_broadcast(app: &mut MyApp) {
+pub fn start_broadcast(app: &mut MyApp) {
     println!("Starting broadcast...");
     app.flags.set_broadcasting(true);
 
@@ -131,7 +131,7 @@ fn start_record(app: &mut MyApp) {
 }
 
 /// Funzione per fermare la trasmissione dello schermo
-fn stop_broadcast(app: &mut MyApp) {
+pub fn stop_broadcast(app: &mut MyApp) {
     println!("Stopping broadcast...");
     app.flags.set_broadcasting(false);
 
@@ -143,7 +143,7 @@ fn stop_broadcast(app: &mut MyApp) {
 }
 
 /// Funzione per fermare la registrazione dello schermo
-fn stop_record(app: &mut MyApp) {
+pub fn stop_record(app: &mut MyApp) {
     println!("Stopping recording...");
     app.flags.set_recording(false);
 
@@ -155,7 +155,7 @@ fn stop_record(app: &mut MyApp) {
 }
 
 /// Funzione per avviare il thread per la trasmissione dello schermo
-fn start_broadcast_thread(
+pub fn start_broadcast_thread(
     broadcast_flag: Arc<Mutex<bool>>,
     rx: mpsc::Receiver<()>,
     capture_area: Option<CaptureArea>,
@@ -216,7 +216,7 @@ fn start_broadcast_thread(
 }
 
 /// Funzione per avviare il thread per la registrazione dello schermo
-fn start_record_thread(
+pub fn start_record_thread(
     record_flag: Arc<Mutex<bool>>,
     rx: mpsc::Receiver<()>,
     capture_area: Option<CaptureArea>,
@@ -283,7 +283,7 @@ fn sync_frame_rate(start_time: Instant) {
 }
 
 /// Ottieni le dimensioni dell'area di cattura
-fn get_capture_dimensions(capture_area: &Option<CaptureArea>) -> (usize, usize) {
+pub fn get_capture_dimensions(capture_area: &Option<CaptureArea>) -> (usize, usize) {
     match capture_area {
         Some(area) => (area.width, area.height),
         None => {
@@ -294,7 +294,7 @@ fn get_capture_dimensions(capture_area: &Option<CaptureArea>) -> (usize, usize) 
 }
 
 /// Crea la directory per la registrazione se non esiste
-fn create_recording_directory(dir: &str) {
+pub fn create_recording_directory(dir: &str) {
     fs::create_dir_all(dir).expect("Failed to create recording directory");
 }
 
