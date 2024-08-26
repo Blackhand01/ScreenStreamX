@@ -21,14 +21,14 @@ pub fn render_receiver_address_input(ui: &mut egui::Ui, app: &mut MyApp) {
 }
 
 // Funzione per il rendering del pulsante di avvio/arresto della ricezione
-pub fn render_recording_button(ui: &mut egui::Ui, app: &mut MyApp) {
-    let button_label = if app.flags.is_recording() {
+pub fn render_receiving_button(ui: &mut egui::Ui, app: &mut MyApp) {
+    let button_label = if app.flags.is_receiving() {
         "Stop Receiving"
     } else {
         "Start Receiving"
     };
 
-    let button_color = if app.flags.is_recording() {
+    let button_color = if app.flags.is_receiving() {
         egui::Color32::from_rgb(102, 0, 0)
     } else {
         egui::Color32::from_rgb(204, 51, 51)
@@ -42,13 +42,13 @@ pub fn render_recording_button(ui: &mut egui::Ui, app: &mut MyApp) {
                 .strong()
         ).fill(button_color)
     ).clicked() {
-        handle_recording_button_click(app);
+        handle_receiving_button_click(app);
     }
 }
 
 // Gestione del clic sul pulsante di avvio/arresto della ricezione
-fn handle_recording_button_click(app: &mut MyApp) {
-    if app.flags.is_recording() {
+fn handle_receiving_button_click(app: &mut MyApp) {
+    if app.flags.is_receiving() {
         stop_receiving(app);
     } else {
         start_receiving(app);
@@ -58,10 +58,10 @@ fn handle_recording_button_click(app: &mut MyApp) {
 // Funzione per avviare la ricezione della trasmissione
 fn start_receiving(app: &mut MyApp) {
     println!("Starting receiving...");
-    app.flags.set_recording(true);
+    app.flags.set_receiving(true);
 
-    let recording_flag = Arc::new(Mutex::new(true));
-    let recording_flag_clone = Arc::clone(&recording_flag);
+    let receiving_flag = Arc::new(Mutex::new(true));
+    let receiving_flag_clone = Arc::clone(&receiving_flag);
 
     let (tx, rx) = mpsc::channel();
     app.network.set_stop_tx(Some(tx));
@@ -87,7 +87,7 @@ fn start_receiving(app: &mut MyApp) {
 
     // Avvia il client in un thread separato
     thread::spawn(move || {
-        start_client(&receiver_address, recording_flag_clone, move |frame: ScreenCapture| {
+        start_client(&receiver_address, receiving_flag_clone, move |frame: ScreenCapture| {
             // Invia il frame attraverso il canale al thread principale
             if frame_tx.send(frame).is_err() {
                 //println!("Failed to send frame to main thread, exiting client thread."); per debug
@@ -99,7 +99,7 @@ fn start_receiving(app: &mut MyApp) {
     println!("Receiving thread started");
 
     // Ciclo principale per aggiornare la finestra
-    while *recording_flag.lock().unwrap() && window.is_open() {
+    while *receiving_flag.lock().unwrap() && window.is_open() {
         if let Ok(frame) = frame_rx.try_recv() {
             if frame.data == vec![0] {
                 println!("Received stop signal from caster, closing window...");
@@ -120,7 +120,7 @@ fn start_receiving(app: &mut MyApp) {
         }
 
         // Gestione dell'arresto della ricezione
-        if rx.try_recv().is_ok() || !*recording_flag.lock().unwrap() {
+        if rx.try_recv().is_ok() || !*receiving_flag.lock().unwrap() {
             println!("Received stop signal, stopping receiving...");
             break;  // Esce dal ciclo
         }
@@ -132,7 +132,7 @@ fn start_receiving(app: &mut MyApp) {
     
     println!("Closing window as requested.");
     // Questo assicura che la finestra sia chiusa correttamente
-    app.flags.set_recording(false);
+    app.flags.set_receiving(false);
     
 
     println!("Receiving thread exiting");
@@ -143,7 +143,7 @@ fn start_receiving(app: &mut MyApp) {
 // Funzione per fermare la ricezione della trasmissione
 fn stop_receiving(app: &mut MyApp) {
     println!("Stopping receiving...");
-    app.flags.set_recording(false);
+    app.flags.set_receiving(false);
 
     if let Some(tx) = app.network.get_stop_tx() {
         if let Err(e) = tx.send(()) {

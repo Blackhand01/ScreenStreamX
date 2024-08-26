@@ -24,7 +24,7 @@ pub fn render_receiver_ui(ui: &mut egui::Ui, app: &mut MyApp) {
         ui.add_space(10.0);
 
         receiver_ui::render_receiver_address_input(ui, app);
-        receiver_ui::render_recording_button(ui, app);
+        receiver_ui::render_receiving_button(ui, app);
     });
 }
 
