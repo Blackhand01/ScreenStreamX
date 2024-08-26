@@ -90,7 +90,7 @@ fn start_receiving(app: &mut MyApp) {
         start_client(&receiver_address, recording_flag_clone, move |frame: ScreenCapture| {
             // Invia il frame attraverso il canale al thread principale
             if frame_tx.send(frame).is_err() {
-                println!("Failed to send frame to main thread, exiting client thread.");
+                //println!("Failed to send frame to main thread, exiting client thread."); per debug
                 return; // Esce dal thread client se l'invio fallisce
             }        
         });
@@ -101,6 +101,10 @@ fn start_receiving(app: &mut MyApp) {
     // Ciclo principale per aggiornare la finestra
     while *recording_flag.lock().unwrap() && window.is_open() {
         if let Ok(frame) = frame_rx.try_recv() {
+            if frame.data == vec![0] {
+                println!("Received stop signal from caster, closing window...");
+                break;
+            }
             let buffer: Vec<u32> = frame.data.chunks(4).map(|pixel| {
                 let r = pixel[0] as u32;
                 let g = pixel[1] as u32;
@@ -116,7 +120,7 @@ fn start_receiving(app: &mut MyApp) {
         }
 
         // Gestione dell'arresto della ricezione
-        if rx.try_recv().is_ok() {
+        if rx.try_recv().is_ok() || !*recording_flag.lock().unwrap() {
             println!("Received stop signal, stopping receiving...");
             break;  // Esce dal ciclo
         }

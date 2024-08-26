@@ -10,10 +10,16 @@ use std::process::{Command, Stdio};
 use std::io::Write;
 use std::time::{Duration, Instant};
 use super::app_main::MyApp;
-use std::net::TcpListener;
+use std::net::{TcpListener, TcpStream, Shutdown};
+use lazy_static::lazy_static;
 
 const TARGET_FRAMERATE: u64 = 10; // Framerate target
 const FRAME_DURATION: Duration = Duration::from_millis(1000 / TARGET_FRAMERATE as u64);
+
+lazy_static! {
+    static ref RECEIVERS: Arc<Mutex<Vec<TcpStream>>> = Arc::new(Mutex::new(Vec::new()));
+    static ref LISTENER: Arc<Mutex<Option<TcpListener>>> = Arc::new(Mutex::new(None));
+}
 
 /// Funzione per il rendering del pulsante di selezione dell'area di cattura
 pub fn render_capture_area_button(ui: &mut egui::Ui, app: &mut MyApp) {
@@ -101,13 +107,34 @@ fn start_broadcast(app: &mut MyApp) {
 
     let capture_area = app.capture.get_capture_area().cloned().filter(|area| area.is_valid());
     let broadcast_flag = Arc::new(Mutex::new(true));
+    let broadcast_flag_clone = Arc::clone(&broadcast_flag);
 
     let (tx, rx) = mpsc::channel();
     app.network.set_broadcast_stop_tx(Some(tx));
 
-    
+    if LISTENER.lock().unwrap().is_none() {
+        let listener = TcpListener::bind("0.0.0.0:8080").expect("Failed to bind to address");
+        *LISTENER.lock().unwrap() = Some(listener.try_clone().unwrap());
+
+        thread::spawn(move || {
+            for stream in listener.incoming() {
+                match stream {
+                    Ok(stream) => {
+                        println!("Receiver connected.");
+                        RECEIVERS.lock().unwrap().push(stream);
+                    }
+                    Err(e) => {
+                        println!("Failed to accept connection: {:?}", e);
+                        break;
+                    }
+                }
+            }
+            println!("Listener thread exiting.");
+        });
+    }
+
     thread::spawn(move || {
-        start_broadcast_thread(broadcast_flag, rx, capture_area);
+        start_broadcast_thread(broadcast_flag_clone, rx, capture_area);
     });
 }
 
@@ -136,6 +163,21 @@ fn stop_broadcast(app: &mut MyApp) {
     println!("Stopping broadcast...");
     app.flags.set_broadcasting(false);
 
+    let mut receivers = RECEIVERS.lock().unwrap();
+    for stream in receivers.iter_mut() {
+        if let Err(e) = stream.write_all(&[0]) { // Segnale speciale per indicare la chiusura
+            println!("Failed to send stop signal to receiver: {:?}", e);
+        } else {
+            println!("Stop signal sent to receiver and connection closed.");
+        }
+
+        if let Err(e) = stream.shutdown(Shutdown::Both) {
+            println!("Failed to shutdown receiver connection: {:?}", e);
+        }
+    }
+    receivers.clear();
+    println!("All receivers disconnected.");
+
     if let Some(tx) = app.network.get_broadcast_stop_tx() {
         if let Err(e) = tx.send(()) {
             println!("Failed to send stop signal: {:?}", e);
@@ -163,57 +205,47 @@ fn start_broadcast_thread(
 ) {
     println!("Broadcast thread started");
 
-    // Crea un listener TCP che ascolta su una specifica porta (es: 8080)
-    let listener = TcpListener::bind("0.0.0.0:8080").expect("Failed to bind to address");
+    let mut screen_capturer = ScreenCapturer::new(capture_area);
 
-    println!("Waiting for receiver to connect...");
+    while *broadcast_flag.lock().unwrap() {
+        if rx.try_recv().is_ok() {
+            println!("Received stop signal, stopping broadcast...");
+            break;
+        }
+        // Cattura il frame e trasmettilo
+        if let Some(frame) = screen_capturer.capture_frame() {
+            //println!("Captured a frame, preparing to send..."); per debug
 
-    // Aspettiamo una connessione da parte di un receiver
-    if let Ok((mut stream, _addr)) = listener.accept() {
-        println!("Receiver connected, starting broadcast...");
+            // Serializzare il frame
+            let serialized_frame = bincode::serialize(&frame).expect("Failed to serialize frame");
 
-        let mut screen_capturer = ScreenCapturer::new(capture_area);
+            let mut receivers = RECEIVERS.lock().unwrap();
+                receivers.retain(|mut stream| {
+                    let length = serialized_frame.len() as u32;
+                    let length_bytes = length.to_be_bytes();
 
-        while *broadcast_flag.lock().unwrap() {
-            if rx.try_recv().is_ok() {
-                println!("Received stop signal, stopping broadcast...");
-                *broadcast_flag.lock().unwrap() = false;
-                break;
-            }
+                    if stream.write_all(&length_bytes).is_err() {
+                        println!("Failed to send frame length.");
+                        return false;
+                    }
 
-            // Cattura il frame e trasmettilo
-            if let Some(frame) = screen_capturer.capture_frame() {
-                println!("Captured a frame, sending...");
+                    if stream.write_all(&serialized_frame).is_err() {
+                        println!("Failed to send frame data.");
+                        return false;
+                    }
 
-                // Serializzare il frame
-                let serialized_frame = bincode::serialize(&frame).expect("Failed to serialize frame");
-
-                // Inviare la lunghezza del frame seguita dal frame stesso
-                let length = serialized_frame.len() as u32;
-                let length_bytes = length.to_be_bytes(); // Converti la lunghezza in big-endian
-
-                // Invia la lunghezza del frame
-                if let Err(e) = stream.write_all(&length_bytes) {
-                    println!("Failed to send frame length: {:?}", e);
-                    break;
-                }
-
-                // Invia i dati del frame
-                if let Err(e) = stream.write_all(&serialized_frame) {
-                    println!("Failed to send frame data: {:?}", e);
-                    break;
-                }
-            } else {
-                println!("Failed to capture frame.");
-            }
-
-            sync_frame_rate(Instant::now());
+                    //println!("Frame sent to receiver."); per debug
+                    true // Mantieni la connessione attiva
+                });
+        } else {
+            println!("Failed to capture frame.");
         }
 
-        println!("Broadcast thread exiting");
-    } else {
-        println!("Failed to accept connection from receiver.");
+        sync_frame_rate(Instant::now());
     }
+
+    println!("Broadcast thread exiting");
+    
 }
 
 /// Funzione per avviare il thread per la registrazione dello schermo
