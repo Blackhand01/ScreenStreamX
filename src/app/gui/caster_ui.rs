@@ -44,7 +44,6 @@ pub fn render_broadcast_button(ui: &mut egui::Ui, app: &mut MyApp) {
     } else {
         ("Start Broadcasting", egui::Color32::from_rgb(204, 51, 51)) // Rosso più chiaro per avviare la trasmissione
     };
-
     if ui.add_sized(
         [200.0, 40.0],
         egui::Button::new(
@@ -248,6 +247,9 @@ pub fn start_broadcast_thread(
 }
 
 /// Funzione per avviare il thread per la registrazione dello schermo
+
+
+
 pub fn start_record_thread(
     record_flag: Arc<Mutex<bool>>,
     rx: mpsc::Receiver<()>,
@@ -257,20 +259,19 @@ pub fn start_record_thread(
 ) {
     println!("Record thread started");
 
-    // Lancia `ffmpeg` per salvare lo stream video in un file MP4 nella cartella "recordings"
     let mut child = Command::new("ffmpeg")
         .args(&[
+            "-loglevel", "quiet",
             "-f", "rawvideo",
-            "-pixel_format", "bgra",
+            "-pixel_format", "rgb0", // Usare 'rgb0' per i colori corretti
             "-video_size", &format!("{}x{}", width, height),
-            "-framerate", &TARGET_FRAMERATE.to_string(),
-            "-i", "-", // Legge dallo stdin
-            "-vf", "format=yuv420p", // Filtra per convertire in un formato compatibile
-            "-codec:v", "libx264", // Codec video
-            "-preset", "medium",  // Preset di codifica più compatibile
-            "-profile:v", "high",  // Profilo H.264 compatibile con QuickTime
-            "-level", "4.0",       // Livello compatibile con QuickTime
+            "-framerate", &TARGET_FRAMERATE.to_string(), // Specifica il framerate corretto
+            "-i", "-", // Legge dallo stdin per il video
+            "-c:v", "libx264", // Codec video
+            "-preset", "ultrafast",  // Preset per ridurre la compressione e mantenere velocità reale
+            "-crf", "0", // Impostare il Constant Rate Factor (CRF) a 0 per qualità massima (nessuna compressione)
             "-pix_fmt", "yuv420p", // Formato pixel compatibile
+            "-r", &TARGET_FRAMERATE.to_string(), // Forza il framerate in uscita
             "-y", "recordings/recorded_video.mp4" // Nome del file di output con percorso
         ])
         .stdin(Stdio::piped())
@@ -284,25 +285,41 @@ pub fn start_record_thread(
     while *record_flag.lock().unwrap() {
         if rx.try_recv().is_ok() {
             println!("Received stop signal, stopping recording...");
-            *record_flag.lock().unwrap() = false;
             break;
         }
 
-        // Cattura il frame e scrivilo nel file video
         if let Some(frame) = screen_capturer.capture_frame() {
             let stride = frame.data.len() / height;
             let rowlen = 4 * width;
             for row in frame.data.chunks(stride) {
                 let row = &row[..rowlen];
-                out.write_all(row).expect("Failed to write frame to ffmpeg");
+                if out.write_all(row).is_err() {
+                    println!("Failed to write frame to ffmpeg");
+                    break;
+                }
             }
         }
+    }
 
-        sync_frame_rate(Instant::now());
+    println!("Flushing and closing ffmpeg...");
+    drop(out); // Chiude lo stdin di ffmpeg per consentirgli di terminare correttamente
+
+    match child.wait() {
+        Ok(status) => {
+            println!("ffmpeg exited with status: {:?}", status);
+        }
+        Err(e) => {
+            println!("Failed to wait on ffmpeg child process: {}", e);
+        }
     }
 
     println!("Record thread exiting");
 }
+
+
+
+
+
 
 /// Sincronizza il framerate per evitare sovraccarichi
 fn sync_frame_rate(start_time: Instant) {
