@@ -66,30 +66,6 @@ pub fn configure_visuals(ctx: &egui::Context, app: &MyApp) {
     ctx.set_visuals(visuals);
 }
 
-// /// Configura le ombre e gli angoli delle finestre
-// fn set_window_visuals(visuals: &mut egui::Visuals) {
-//     visuals.window_shadow.blur = 15.0;
-//     visuals.window_shadow.offset = egui::Vec2::new(2.0, 2.0);
-//     visuals.window_rounding = egui::Rounding::same(12.0);
-// }
-
-// /// Configura l'aspetto del testo
-// fn set_text_visuals(visuals: &mut egui::Visuals) {
-//     visuals.override_text_color = Some(egui::Color32::from_gray(230));
-// }
-
-// /// Configura i colori e le ombre dei widget in base al loro stato
-// fn set_widget_visuals(visuals: &mut egui::Visuals) {
-//     visuals.widgets.noninteractive.bg_fill = egui::Color32::from_rgb(40, 40, 40);
-//     visuals.widgets.inactive.bg_fill = egui::Color32::from_rgb(60, 60, 60);
-//     visuals.widgets.hovered.bg_fill = egui::Color32::from_rgb(80, 80, 80);
-//     visuals.widgets.active.bg_fill = egui::Color32::from_rgb(100, 100, 100);
-//     visuals.widgets.open.bg_fill = egui::Color32::from_rgb(70, 70, 70);
-
-//     visuals.widgets.noninteractive.bg_stroke = egui::Stroke::new(1.0, egui::Color32::from_gray(70));
-//     visuals.widgets.hovered.bg_stroke = egui::Stroke::new(1.5, egui::Color32::WHITE);
-//     visuals.widgets.active.bg_stroke = egui::Stroke::new(2.0, egui::Color32::WHITE);
-// }
 
 /// Pannello di selezione dell'area di cattura
 pub fn capture_area_panel(ctx: &egui::Context, app: &mut MyApp) {
@@ -378,7 +354,7 @@ fn get_shortcuts() -> Vec<Shortcut> {
 fn render_theme_toggle_button(ui: &mut egui::Ui, app: &mut MyApp) {
     let button_label = match app.user_settings.get_theme() {
         Theme::Light => "🌙 Switch to Dark Theme",
-        Theme::Dark => " Switch to Light Theme",
+        Theme::Dark => "🔆 Switch to Light Theme",
     };
 
     if ui.add(egui::Button::new(button_label)).clicked() {
@@ -449,6 +425,8 @@ fn render_receiver_button(ui: &mut egui::Ui, app: &mut MyApp) {
 }
 
 /// Rendering dell'interfaccia utente basato sulla modalità selezionata
+// src/app/gui/central_panel.rs
+
 fn render_mode_ui(ui: &mut egui::Ui, app: &mut MyApp) {
     if app.is_caster() {
         render_caster_ui(ui, app);
@@ -456,6 +434,7 @@ fn render_mode_ui(ui: &mut egui::Ui, app: &mut MyApp) {
         render_receiver_ui(ui, app);
     }
 }
+
 
 pub fn render_screen_lock_overlay(ctx: &egui::Context) {
     egui::CentralPanel::default().show(ctx, |ui| {
