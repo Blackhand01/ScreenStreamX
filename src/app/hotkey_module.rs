@@ -3,7 +3,6 @@ use global_hotkey::{GlobalHotKeyManager, hotkey};
 use global_hotkey::hotkey::{Code, HotKey};
 use std::error::Error;
 
-
 pub struct HotkeySettings {
     pub hotkey_map: HashMap<u32, HotkeyAction>,
     hotkey_manager: GlobalHotKeyManager,
@@ -27,7 +26,7 @@ impl HotkeySettings {
             hotkey_manager: GlobalHotKeyManager::new()?,
         };
 
-        // Register hotkeys with their corresponding actions
+        // Registra hotkeys con le azioni corrispondenti
         settings.register_hotkey("Ctrl+Shift+B", HotkeyAction::StartPauseBroadcast)?;
         settings.register_hotkey("Ctrl+Shift+R", HotkeyAction::StartStopRecording)?;
         settings.register_hotkey("Ctrl+Shift+L", HotkeyAction::LockUnlockScreen)?;
@@ -72,6 +71,4 @@ impl HotkeySettings {
             Err("Invalid key combination".into())
         }
     }
-
- 
 }

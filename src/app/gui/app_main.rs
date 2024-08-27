@@ -4,7 +4,7 @@ use local_ip_address::local_ip;
 use crate::app::{capture::CaptureArea, hotkey_module::HotkeyAction};
 use crate::app::hotkey_module::HotkeySettings;
 use crate::app::gui::caster_ui;  // Importiamo correttamente il modulo caster_ui per utilizzare le funzioni di trasmissione
-use super::visuals::{configure_visuals, central_panel, capture_area_panel, monitor_selection_panel};
+use super::visuals::{configure_visuals, central_panel, capture_area_panel, monitor_selection_panel, render_screen_lock_overlay};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
 
@@ -16,6 +16,7 @@ pub fn initialize() -> Result<(), eframe::Error> {
         Box::new(|cc| Ok(Box::new(MyApp::new(cc)))),
     )
 }
+
 /// Stato del network, incluse informazioni su indirizzi e canali di comunicazione.
 pub struct NetworkState {
     address: String,
@@ -77,12 +78,14 @@ impl NetworkState {
 /// Stato della cattura, incluse le informazioni sull'area di cattura.
 pub struct CaptureState {
     capture_area: Option<CaptureArea>,
+    is_fullscreen: bool, 
 }
 
 impl CaptureState {
     pub fn new() -> Self {
         Self {
-            capture_area: Some(CaptureArea::default()), // Inizializza con un'area di cattura vuota
+            capture_area: Some(CaptureArea::default()), 
+            is_fullscreen: true, 
         }
     }
 
@@ -95,7 +98,21 @@ impl CaptureState {
     }
 
     pub fn set_capture_area(&mut self, area: Option<CaptureArea>) {
+        if let Some(area) = &area {
+            let display = scrap::Display::primary().unwrap();
+            self.is_fullscreen = area.x == 0 && area.y == 0 && area.width == display.width() && area.height == display.height();
+        } else {
+            self.is_fullscreen = true;
+        }
         self.capture_area = area;
+    }
+
+    pub fn is_fullscreen(&self) -> bool {
+        self.is_fullscreen
+    }
+
+    pub fn set_fullscreen(&mut self, value: bool) {
+        self.is_fullscreen = value;
     }
 }
 
@@ -104,6 +121,8 @@ pub struct UIState {
     selecting_area: bool,
     show_confirmation_dialog: bool,
     show_monitor_selection: bool,
+    show_shortcuts_menu: bool,
+
 }
 
 impl UIState {
@@ -112,6 +131,7 @@ impl UIState {
             selecting_area: false, // Inizialmente la selezione non è attiva
             show_confirmation_dialog: false, // Inizialmente la finestra di conferma non è visibile
             show_monitor_selection: false, // Inizializza con false
+            show_shortcuts_menu: false,
         }
     }
 
@@ -139,6 +159,13 @@ impl UIState {
         self.show_monitor_selection = value;
     }
 
+    pub fn is_showing_shortcuts_menu(&self) -> bool {
+        self.show_shortcuts_menu
+    }
+
+    pub fn set_showing_shortcuts_menu(&mut self, value: bool) {
+        self.show_shortcuts_menu = value;
+    }
 }
 
 /// Flag per la gestione di stati come broadcasting, recording, ecc.
@@ -147,6 +174,7 @@ pub struct AppFlags {
     is_recording: bool,
     is_broadcasting: bool,
     is_receiving: bool,
+    is_screen_locked: bool, 
 }
 
 impl AppFlags {
@@ -156,9 +184,18 @@ impl AppFlags {
             is_recording: false,
             is_broadcasting: false,
             is_receiving: false,
+            is_screen_locked: false, 
         }
     }
 
+    // Altri metodi...
+    pub fn is_screen_locked(&self) -> bool {
+        self.is_screen_locked
+    }
+
+    pub fn set_screen_locked(&mut self, value: bool) {
+        self.is_screen_locked = value;
+    }
 
     pub fn is_receiving(&self) -> bool {
         self.is_receiving
@@ -193,7 +230,6 @@ impl AppFlags {
     }
 }
 
-
 /// Struttura principale dell'applicazione.
 pub struct MyApp {
     pub mode: AppMode,
@@ -202,12 +238,40 @@ pub struct MyApp {
     pub ui_state: UIState,
     pub flags: AppFlags,
     pub hotkeys: HotkeySettings,
+    pub user_settings: UserSettings, // Aggiunto user_settings per la gestione del tema
 }
 
 /// Enum per gestire la modalità dell'app (Caster o Receiver).
 pub enum AppMode {
     Caster,
     Receiver,
+}
+
+pub struct UserSettings {
+    theme: Theme,
+}
+
+impl UserSettings {
+    pub fn new() -> Self {
+        Self {
+            theme: Theme::Dark,
+        }
+    }
+
+    // Getter per il tema
+    pub fn get_theme(&self) -> &Theme {
+        &self.theme
+    }
+
+    // Setter per il tema
+    pub fn set_theme(&mut self, new_theme: Theme) {
+        self.theme = new_theme;
+    }
+}
+
+pub enum Theme {
+    Light,
+    Dark,
 }
 
 impl MyApp {
@@ -221,8 +285,49 @@ impl MyApp {
             ui_state: UIState::new(),
             flags: AppFlags::new(),
             hotkeys,
+            user_settings: UserSettings::new(), // Inizializzazione di user_settings
         }
     }
+
+    pub fn toggle_theme(&mut self) {
+        self.user_settings.set_theme(match self.user_settings.get_theme() {
+            Theme::Light => Theme::Dark,
+            Theme::Dark => Theme::Light,
+        });
+    }
+
+    // Aggiunta di un metodo per ottenere lo stato come stringa
+    pub fn get_status_message(&self) -> String {
+        let mut status = String::new();
+    
+        if self.flags.is_broadcasting() {
+            status.push_str("Broadcasting | ");
+        }
+    
+        if self.flags.is_recording() {
+            status.push_str("Recording | ");
+        }
+    
+        if self.flags.is_receiving() {
+            status.push_str("Receiving | ");
+        }
+    
+        if self.capture.is_fullscreen() {
+            status.push_str("Fullscreen | ");
+        } else {
+            status.push_str("Custom Area | ");
+        }
+    
+        if status.is_empty() {
+            status.push_str("Idle");
+        } else {
+            // Rimuove l'ultimo carattere "| " alla fine della stringa
+            status.truncate(status.len() - 3);
+        }
+    
+        status
+    }
+    
 
     // Metodi per gestire la modalità (Caster o Receiver)
     pub fn set_caster(&mut self, value: bool) {
@@ -309,7 +414,10 @@ impl MyApp {
                 }
             }
             HotkeyAction::LockUnlockScreen => {
-                println!("Lock/Unlock Screen via hotkey (Not implemented yet)");
+                // Alterna lo stato di blocco dello schermo
+                let new_state = !self.flags.is_screen_locked();
+                self.flags.set_screen_locked(new_state);
+                println!("Screen lock toggled: {}", new_state);
             }
             HotkeyAction::ToggleAnnotation => {
                 self.flags.set_annotation_tools_active(!self.flags.is_annotation_tools_active());
@@ -327,16 +435,21 @@ impl MyApp {
     }
 }
 
-
 impl App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        if self.ui_state.is_selecting_area() {
-            capture_area_panel(ctx, self);
-        } else if self.ui_state.is_showing_monitor_selection() {
-            monitor_selection_panel(ctx, self);
+        if self.flags.is_screen_locked() {
+            // Usa la funzione modulare per rendere l'overlay di blocco dello schermo
+            render_screen_lock_overlay(ctx);
         } else {
-            configure_visuals(ctx);
-            central_panel(ctx, self);
+            // Logica esistente per la UI
+            if self.ui_state.is_selecting_area() {
+                capture_area_panel(ctx, self);
+            } else if self.ui_state.is_showing_monitor_selection() {
+                monitor_selection_panel(ctx, self);
+            } else {
+                configure_visuals(ctx, self);
+                central_panel(ctx, self);
+            }
         }
 
         // Gestione degli eventi delle hotkeys
