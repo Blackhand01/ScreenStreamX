@@ -1,15 +1,19 @@
-// src/app/gui/app_main.rs
 use eframe::{egui, App, CreationContext};
-use local_ip_address::local_ip;
-use crate::app::{capture::CaptureArea, hotkey_module::HotkeyAction};
-use crate::app::hotkey_module::HotkeySettings;
-use crate::app::gui::caster_ui;  // Importiamo correttamente il modulo caster_ui per utilizzare le funzioni di trasmissione
-use super::visuals::{configure_visuals, central_panel, capture_area_panel, monitor_selection_panel, render_screen_lock_overlay};
-use std::sync::mpsc;
-use std::sync::{Arc, Mutex};
+use crate::app::{gui::caster_ui, hotkey_module::{HotkeyAction, HotkeySettings}};
+use crate::app::gui::visuals::{configure_visuals, central_panel, capture_area_panel, monitor_selection_panel, render_screen_lock_overlay};
+
+use std::sync::{mpsc, Arc, Mutex};
+use crate::app::state::{
+    network_state::NetworkState,
+    capture_state::CaptureState,
+    ui_state::UIState,
+    app_flags::AppFlags,
+    user_settings::UserSettings,
+};
+use eframe::NativeOptions;
 
 pub fn initialize() -> Result<(), eframe::Error> {
-    let options = eframe::NativeOptions::default();
+    let options = NativeOptions::default();
     eframe::run_native(
         "ScreenStreamX",
         options,
@@ -17,220 +21,19 @@ pub fn initialize() -> Result<(), eframe::Error> {
     )
 }
 
-/// Stato del network, incluse informazioni su indirizzi e canali di comunicazione.
-pub struct NetworkState {
-    address: String,
-    stop_tx: Option<mpsc::Sender<()>>,
-    broadcast_stop_tx: Option<mpsc::Sender<()>>,
-    record_stop_tx: Option<mpsc::Sender<()>>,
+
+pub enum Theme {
+    Light,
+    Dark,
 }
 
-impl NetworkState {
-    pub fn new() -> Self {
-        let ip_address = match local_ip() {
-            Ok(ip) => ip.to_string(),
-            Err(_) => String::from("Unable to get IP"),
-        };
-
-        Self {
-            address: ip_address,
-            stop_tx: None,
-            broadcast_stop_tx: None,
-            record_stop_tx: None,
-        }
-    }
-
-    pub fn get_address(&self) -> &str {
-        &self.address
-    }
-
-    pub fn set_address(&mut self, value: String) {
-        self.address = value;
-    }
-
-    // Getter e setter per broadcast_stop_tx
-    pub fn get_broadcast_stop_tx(&self) -> Option<mpsc::Sender<()>> {
-        self.broadcast_stop_tx.clone()
-    }
-
-    pub fn set_broadcast_stop_tx(&mut self, tx: Option<mpsc::Sender<()>>) {
-        self.broadcast_stop_tx = tx;
-    }
-
-    // Getter e setter per record_stop_tx
-    pub fn get_record_stop_tx(&self) -> Option<mpsc::Sender<()>> {
-        self.record_stop_tx.clone()
-    }
-
-    pub fn set_record_stop_tx(&mut self, tx: Option<mpsc::Sender<()>>) {
-        self.record_stop_tx = tx;
-    }
-
-    pub fn get_stop_tx(&self) -> Option<mpsc::Sender<()>> {
-        self.stop_tx.clone()
-    }
-
-    pub fn set_stop_tx(&mut self, tx: Option<mpsc::Sender<()>>) {
-        self.stop_tx = tx;
-    }
+pub enum AppMode {
+    Caster,
+    Receiver,
 }
 
-/// Stato della cattura, incluse le informazioni sull'area di cattura.
-pub struct CaptureState {
-    capture_area: Option<CaptureArea>,
-    is_fullscreen: bool, 
-}
 
-impl CaptureState {
-    pub fn new() -> Self {
-        Self {
-            capture_area: Some(CaptureArea::default()), 
-            is_fullscreen: true, 
-        }
-    }
 
-    pub fn get_capture_area(&self) -> Option<&CaptureArea> {
-        self.capture_area.as_ref()
-    }
-
-    pub fn get_capture_area_mut(&mut self) -> Option<&mut CaptureArea> {
-        self.capture_area.as_mut()
-    }
-
-    pub fn set_capture_area(&mut self, area: Option<CaptureArea>) {
-        if let Some(area) = &area {
-            let display = scrap::Display::primary().unwrap();
-            self.is_fullscreen = area.x == 0 && area.y == 0 && area.width == display.width() && area.height == display.height();
-        } else {
-            self.is_fullscreen = true;
-        }
-        self.capture_area = area;
-    }
-
-    pub fn is_fullscreen(&self) -> bool {
-        self.is_fullscreen
-    }
-
-    pub fn set_fullscreen(&mut self, value: bool) {
-        self.is_fullscreen = value;
-    }
-}
-
-/// Stato dell'interfaccia utente, comprese le opzioni visive e di selezione.
-pub struct UIState {
-    selecting_area: bool,
-    show_confirmation_dialog: bool,
-    show_monitor_selection: bool,
-    show_shortcuts_menu: bool,
-
-}
-
-impl UIState {
-    pub fn new() -> Self {
-        Self {
-            selecting_area: false, // Inizialmente la selezione non è attiva
-            show_confirmation_dialog: false, // Inizialmente la finestra di conferma non è visibile
-            show_monitor_selection: false, // Inizializza con false
-            show_shortcuts_menu: false,
-        }
-    }
-
-    pub fn is_selecting_area(&self) -> bool {
-        self.selecting_area
-    }
-
-    pub fn set_selecting_area(&mut self, value: bool) {
-        self.selecting_area = value;
-    }
-
-    pub fn show_confirmation_dialog(&self) -> bool {
-        self.show_confirmation_dialog
-    }
-
-    pub fn set_show_confirmation_dialog(&mut self, value: bool) {
-        self.show_confirmation_dialog = value;
-    }
-
-    pub fn is_showing_monitor_selection(&self) -> bool {
-        self.show_monitor_selection
-    }
-
-    pub fn set_showing_monitor_selection(&mut self, value: bool) {
-        self.show_monitor_selection = value;
-    }
-
-    pub fn is_showing_shortcuts_menu(&self) -> bool {
-        self.show_shortcuts_menu
-    }
-
-    pub fn set_showing_shortcuts_menu(&mut self, value: bool) {
-        self.show_shortcuts_menu = value;
-    }
-}
-
-/// Flag per la gestione di stati come broadcasting, recording, ecc.
-pub struct AppFlags {
-    is_annotation_tools_active: bool,
-    is_recording: bool,
-    is_broadcasting: bool,
-    is_receiving: bool,
-    is_screen_locked: bool, 
-}
-
-impl AppFlags {
-    pub fn new() -> Self {
-        Self {
-            is_annotation_tools_active: false,
-            is_recording: false,
-            is_broadcasting: false,
-            is_receiving: false,
-            is_screen_locked: false, 
-        }
-    }
-
-    // Altri metodi...
-    pub fn is_screen_locked(&self) -> bool {
-        self.is_screen_locked
-    }
-
-    pub fn set_screen_locked(&mut self, value: bool) {
-        self.is_screen_locked = value;
-    }
-
-    pub fn is_receiving(&self) -> bool {
-        self.is_receiving
-    }
-
-    pub fn set_receiving(&mut self, value: bool) {
-        self.is_receiving = value;
-    }
-    
-    pub fn is_recording(&self) -> bool {
-        self.is_recording
-    }
-
-    pub fn set_recording(&mut self, value: bool) {
-        self.is_recording = value;
-    }
-
-    pub fn is_broadcasting(&self) -> bool {
-        self.is_broadcasting
-    }
-
-    pub fn set_broadcasting(&mut self, value: bool) {
-        self.is_broadcasting = value;
-    }
-
-    pub fn is_annotation_tools_active(&self) -> bool {
-        self.is_annotation_tools_active
-    }
-
-    pub fn set_annotation_tools_active(&mut self, value: bool) {
-        self.is_annotation_tools_active = value;
-    }
-}
-
-/// Struttura principale dell'applicazione.
 pub struct MyApp {
     pub mode: AppMode,
     pub network: NetworkState,
@@ -238,40 +41,7 @@ pub struct MyApp {
     pub ui_state: UIState,
     pub flags: AppFlags,
     pub hotkeys: HotkeySettings,
-    pub user_settings: UserSettings, // Aggiunto user_settings per la gestione del tema
-}
-
-/// Enum per gestire la modalità dell'app (Caster o Receiver).
-pub enum AppMode {
-    Caster,
-    Receiver,
-}
-
-pub struct UserSettings {
-    theme: Theme,
-}
-
-impl UserSettings {
-    pub fn new() -> Self {
-        Self {
-            theme: Theme::Dark,
-        }
-    }
-
-    // Getter per il tema
-    pub fn get_theme(&self) -> &Theme {
-        &self.theme
-    }
-
-    // Setter per il tema
-    pub fn set_theme(&mut self, new_theme: Theme) {
-        self.theme = new_theme;
-    }
-}
-
-pub enum Theme {
-    Light,
-    Dark,
+    pub user_settings: UserSettings,
 }
 
 impl MyApp {
@@ -438,10 +208,8 @@ impl MyApp {
 impl App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         if self.flags.is_screen_locked() {
-            // Usa la funzione modulare per rendere l'overlay di blocco dello schermo
             render_screen_lock_overlay(ctx);
         } else {
-            // Logica esistente per la UI
             if self.ui_state.is_selecting_area() {
                 capture_area_panel(ctx, self);
             } else if self.ui_state.is_showing_monitor_selection() {
@@ -452,11 +220,11 @@ impl App for MyApp {
             }
         }
 
-        // Gestione degli eventi delle hotkeys
-        if let Ok(event) = global_hotkey::GlobalHotKeyEvent::receiver().try_recv() {
-            if let Some(action) = self.hotkeys.hotkey_map.get(&event.id).cloned() {
-                self.handle_hotkey_action(action);
-            }
+       // Gestione degli eventi delle hotkeys
+       if let Ok(event) = global_hotkey::GlobalHotKeyEvent::receiver().try_recv() {
+        if let Some(action) = self.hotkeys.hotkey_map.get(&event.id).cloned() {
+            self.handle_hotkey_action(action);
         }
+    }
     }
 }
