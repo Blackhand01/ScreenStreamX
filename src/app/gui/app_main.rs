@@ -7,6 +7,8 @@ use crate::app::gui::caster_ui;  // Importiamo correttamente il modulo caster_ui
 use super::visuals::{configure_visuals, central_panel, capture_area_panel, monitor_selection_panel};
 use std::sync::mpsc;
 use std::sync::{Arc, Mutex};
+use crate::app::capture::ScreenCapture;
+use super::receiver_ui;
 
 pub fn initialize() -> Result<(), eframe::Error> {
     let options = eframe::NativeOptions::default();
@@ -202,6 +204,10 @@ pub struct MyApp {
     pub ui_state: UIState,
     pub flags: AppFlags,
     pub hotkeys: HotkeySettings,
+
+    pub frame_receiver: Option<mpsc::Receiver<ScreenCapture>>,
+    pub texture: Option<egui::TextureHandle>,
+    pub receiving_flag: Arc<Mutex<bool>>,
 }
 
 /// Enum per gestire la modalità dell'app (Caster o Receiver).
@@ -221,6 +227,35 @@ impl MyApp {
             ui_state: UIState::new(),
             flags: AppFlags::new(),
             hotkeys,
+            frame_receiver: None,
+            texture: None,
+            receiving_flag: Arc::new(Mutex::new(false)),
+        }
+    }
+
+    pub fn set_frame_receiver(&mut self, receiver: Option<mpsc::Receiver<ScreenCapture>>) {
+        self.frame_receiver = receiver;
+    }
+
+    pub fn update_receiver_ui(&mut self, ctx: &egui::Context) {
+        if let Some(ref receiver) = self.frame_receiver {
+            if let Ok(frame) = receiver.try_recv() {
+                let texture = ctx.load_texture(
+                    "received_frame",
+                    egui::ColorImage::from_rgba_unmultiplied(
+                        [frame.width as usize, frame.height as usize],
+                        &frame.data,
+                    ),
+                    egui::TextureOptions::LINEAR,
+                );
+                self.texture = Some(texture);
+            }
+        }
+    }
+
+    pub fn render_received_image(&self, ui: &mut egui::Ui) {
+        if let Some(ref texture) = self.texture {
+            ui.image(texture);
         }
     }
 
@@ -291,6 +326,16 @@ impl MyApp {
             }
         }
     }
+    pub fn stop_receiving(&mut self) {
+        println!("Stopping receiving...");
+        self.flags.set_receiving(false);
+
+        if let Some(tx) = self.network.get_stop_tx() {
+            if let Err(e) = tx.send(()) {
+                println!("Failed to send stop signal: {:?}", e);
+            }
+        }
+    }
 
     fn handle_hotkey_action(&mut self, action: HotkeyAction) {
         match action {
@@ -327,16 +372,68 @@ impl MyApp {
     }
 }
 
-
 impl App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
-        if self.ui_state.is_selecting_area() {
-            capture_area_panel(ctx, self);
-        } else if self.ui_state.is_showing_monitor_selection() {
-            monitor_selection_panel(ctx, self);
-        } else {
-            configure_visuals(ctx);
-            central_panel(ctx, self);
+        // Gestione della ricezione dei frame
+        if self.flags.is_receiving() {
+            if let Some(ref receiver) = self.frame_receiver {
+                if let Ok(frame) = receiver.try_recv() {
+                    let texture = ctx.load_texture(
+                        "received_frame",
+                        egui::ColorImage::from_rgba_unmultiplied(
+                            [frame.width as usize, frame.height as usize],
+                            &frame.data,
+                        ),
+                        egui::TextureOptions::LINEAR,
+                    );
+                    self.texture = Some(texture);
+                }
+            }
+        }
+
+        // Render della GUI principale
+        egui::CentralPanel::default().show(ctx, |ui| {
+            // Esegui le normali operazioni di rendering dell'interfaccia
+            if self.ui_state.is_selecting_area() {
+                capture_area_panel(ctx, self);
+            } else if self.ui_state.is_showing_monitor_selection() {
+                monitor_selection_panel(ctx, self);
+            } else {
+                configure_visuals(ctx);
+                central_panel(ctx, self);
+            }
+        });
+
+        // Render della finestra di ricezione se attiva
+        if self.flags.is_receiving() {
+            egui::Window::new("Receiving Window")
+                .default_width(800.0)  
+                .default_height(600.0)  
+                .collapsible(false)  
+                .resizable(true)  
+                .show(ctx, |ui| {
+                    egui::TopBottomPanel::top("top_panel")
+                        .show_inside(ui, |ui| {
+                            // Aggiungi i tuoi pulsanti o controlli qui
+                            if ui.button("Stop Receiving").clicked() {
+                                self.stop_receiving();
+                            }
+
+                            if ui.button("Another Button").clicked() {
+                                println!("Another button clicked!");
+                            }
+                        });
+
+                    ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
+                    // Render del frame ricevuto (se disponibile)
+                    if let Some(ref texture) = self.texture {
+                        ui.image(texture);
+                    } else {
+                        ui.label("No image received yet.");
+                    }
+                });
+            });
+
         }
 
         // Gestione degli eventi delle hotkeys
