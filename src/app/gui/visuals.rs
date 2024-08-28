@@ -1,6 +1,7 @@
 use eframe::egui;
 use super::app_main::{MyApp, Theme};
 use super::components::{render_caster_ui, render_receiver_ui};
+use super::receiver_ui::render_receiving_button;
 use crate::app::capture::CaptureArea;
 use crate::utils::multi_monitor::get_available_monitors;
 
@@ -432,6 +433,33 @@ fn render_mode_ui(ui: &mut egui::Ui, app: &mut MyApp) {
         render_caster_ui(ui, app);
     } else {
         render_receiver_ui(ui, app);
+
+        if app.flags.is_receiving() {
+            ui.separator();
+            render_receiving_screen(ui, app);
+        }
+    }
+}
+
+
+pub fn render_receiving_screen(ui: &mut egui::Ui, app: &mut MyApp) {
+    if let Some(ref texture) = app.texture {
+        let texture_size = texture.size_vec2();
+        let available_size = ui.available_size();
+
+        // Calcola la scala per adattare l'immagine alla finestra disponibile mantenendo le proporzioni
+        let scale = (available_size.x / texture_size.x).min(available_size.y / texture_size.y);
+        let scaled_size = texture_size * scale;
+
+        // Calcola il rettangolo dell'immagine centrato
+        let image_rect = egui::Rect::from_min_size(ui.min_rect().min, scaled_size);
+
+        // Disegna l'immagine ridimensionata nel rettangolo calcolato
+        ui.allocate_ui_at_rect(image_rect, |ui| {
+            ui.image(texture);
+        });
+    } else {
+        ui.label("No image received yet.");
     }
 }
 

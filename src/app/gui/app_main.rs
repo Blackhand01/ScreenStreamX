@@ -1,7 +1,6 @@
 use eframe::{egui, App, CreationContext};
 use crate::app::{gui::caster_ui, hotkey_module::{HotkeyAction, HotkeySettings}};
 use crate::app::gui::visuals::{configure_visuals, central_panel, capture_area_panel, monitor_selection_panel, render_screen_lock_overlay};
-
 use std::sync::{mpsc, Arc, Mutex};
 use crate::app::state::{
     network_state::NetworkState,
@@ -11,6 +10,7 @@ use crate::app::state::{
     user_settings::UserSettings,
 };
 use eframe::NativeOptions;
+use crate::app::capture::ScreenCapture;
 
 pub fn initialize() -> Result<(), eframe::Error> {
     let options = NativeOptions::default();
@@ -20,7 +20,6 @@ pub fn initialize() -> Result<(), eframe::Error> {
         Box::new(|cc| Ok(Box::new(MyApp::new(cc)))),
     )
 }
-
 
 pub enum Theme {
     Light,
@@ -32,8 +31,6 @@ pub enum AppMode {
     Receiver,
 }
 
-
-
 pub struct MyApp {
     pub mode: AppMode,
     pub network: NetworkState,
@@ -42,6 +39,9 @@ pub struct MyApp {
     pub flags: AppFlags,
     pub hotkeys: HotkeySettings,
     pub user_settings: UserSettings,
+    pub frame_receiver: Option<mpsc::Receiver<ScreenCapture>>,
+    pub texture: Option<egui::TextureHandle>,
+    pub receiving_flag: Arc<Mutex<bool>>,
 }
 
 impl MyApp {
@@ -56,6 +56,35 @@ impl MyApp {
             flags: AppFlags::new(),
             hotkeys,
             user_settings: UserSettings::new(), // Inizializzazione di user_settings
+            frame_receiver: None,
+            texture: None,
+            receiving_flag: Arc::new(Mutex::new(false)),
+        }
+    }
+
+    pub fn set_frame_receiver(&mut self, receiver: Option<mpsc::Receiver<ScreenCapture>>) {
+        self.frame_receiver = receiver;
+    }
+
+    pub fn update_receiver_ui(&mut self, ctx: &egui::Context) {
+        if let Some(ref receiver) = self.frame_receiver {
+            if let Ok(frame) = receiver.try_recv() {
+                let texture = ctx.load_texture(
+                    "received_frame",
+                    egui::ColorImage::from_rgba_unmultiplied(
+                        [frame.width as usize, frame.height as usize],
+                        &frame.data,
+                    ),
+                    egui::TextureOptions::LINEAR,
+                );
+                self.texture = Some(texture);
+            }
+        }
+    }
+
+    pub fn render_received_image(&self, ui: &mut egui::Ui) {
+        if let Some(ref texture) = self.texture {
+            ui.image(texture);
         }
     }
 
@@ -66,7 +95,6 @@ impl MyApp {
         });
     }
 
-    // Aggiunta di un metodo per ottenere lo stato come stringa
     pub fn get_status_message(&self) -> String {
         let mut status = String::new();
     
@@ -91,15 +119,12 @@ impl MyApp {
         if status.is_empty() {
             status.push_str("Idle");
         } else {
-            // Rimuove l'ultimo carattere "| " alla fine della stringa
             status.truncate(status.len() - 3);
         }
     
         status
     }
     
-
-    // Metodi per gestire la modalità (Caster o Receiver)
     pub fn set_caster(&mut self, value: bool) {
         self.mode = if value { AppMode::Caster } else { AppMode::Receiver };
     }
@@ -108,7 +133,6 @@ impl MyApp {
         matches!(self.mode, AppMode::Caster)
     }
 
-    // Metodo per avviare la trasmissione
     pub fn start_broadcast(&mut self) {
         println!("Starting broadcast...");
         self.flags.set_broadcasting(true);
@@ -124,7 +148,6 @@ impl MyApp {
         });
     }
 
-    // Metodo per fermare la trasmissione
     pub fn stop_broadcast(&mut self) {
         println!("Stopping broadcast...");
         self.flags.set_broadcasting(false);
@@ -136,7 +159,6 @@ impl MyApp {
         }
     }
 
-    // Metodo per avviare la registrazione
     pub fn start_recording(&mut self) {
         println!("Starting recording...");
         self.flags.set_recording(true);
@@ -155,12 +177,22 @@ impl MyApp {
         });
     }
 
-    // Metodo per fermare la registrazione
     pub fn stop_recording(&mut self) {
         println!("Stopping recording...");
         self.flags.set_recording(false);
 
         if let Some(tx) = self.network.get_record_stop_tx() {
+            if let Err(e) = tx.send(()) {
+                println!("Failed to send stop signal: {:?}", e);
+            }
+        }
+    }
+
+    pub fn stop_receiving(&mut self) {
+        println!("Stopping receiving...");
+        self.flags.set_receiving(false);
+
+        if let Some(tx) = self.network.get_stop_tx() {
             if let Err(e) = tx.send(()) {
                 println!("Failed to send stop signal: {:?}", e);
             }
@@ -184,7 +216,6 @@ impl MyApp {
                 }
             }
             HotkeyAction::LockUnlockScreen => {
-                // Alterna lo stato di blocco dello schermo
                 let new_state = !self.flags.is_screen_locked();
                 self.flags.set_screen_locked(new_state);
                 println!("Screen lock toggled: {}", new_state);
@@ -210,21 +241,53 @@ impl App for MyApp {
         if self.flags.is_screen_locked() {
             render_screen_lock_overlay(ctx);
         } else {
-            if self.ui_state.is_selecting_area() {
-                capture_area_panel(ctx, self);
-            } else if self.ui_state.is_showing_monitor_selection() {
-                monitor_selection_panel(ctx, self);
-            } else {
-                configure_visuals(ctx, self);
-                central_panel(ctx, self);
+            if self.flags.is_receiving() {
+                self.update_receiver_ui(ctx);
+            }
+
+            egui::CentralPanel::default().show(ctx, |ui| {
+                if self.ui_state.is_selecting_area() {
+                    capture_area_panel(ctx, self);
+                } else if self.ui_state.is_showing_monitor_selection() {
+                    monitor_selection_panel(ctx, self);
+                } else {
+                    configure_visuals(ctx, self);
+                    central_panel(ctx, self);
+                }
+            });
+
+            if self.flags.is_receiving() {
+                egui::Window::new("Receiving Window")
+                    .default_width(800.0)
+                    .default_height(600.0)
+                    .collapsible(false)
+                    .resizable(true)
+                    .show(ctx, |ui| {
+                        egui::TopBottomPanel::top("top_panel").show_inside(ui, |ui| {
+                            if ui.button("Stop Receiving").clicked() {
+                                self.stop_receiving();
+                            }
+
+                            if ui.button("Another Button").clicked() {
+                                println!("Another button clicked!");
+                            }
+                        });
+
+                        ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
+                            if let Some(ref texture) = self.texture {
+                                ui.image(texture);
+                            } else {
+                                ui.label("No image received yet.");
+                            }
+                        });
+                    });
+            }
+
+            if let Ok(event) = global_hotkey::GlobalHotKeyEvent::receiver().try_recv() {
+                if let Some(action) = self.hotkeys.hotkey_map.get(&event.id).cloned() {
+                    self.handle_hotkey_action(action);
+                }
             }
         }
-
-       // Gestione degli eventi delle hotkeys
-       if let Ok(event) = global_hotkey::GlobalHotKeyEvent::receiver().try_recv() {
-        if let Some(action) = self.hotkeys.hotkey_map.get(&event.id).cloned() {
-            self.handle_hotkey_action(action);
-        }
-    }
     }
 }
