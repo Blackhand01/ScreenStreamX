@@ -11,6 +11,10 @@ use crate::app::state::{
 };
 use eframe::NativeOptions;
 use crate::app::capture::ScreenCapture;
+use std::thread;
+use crate::app::gui::receiver_ui::start_record_thread_for_receiver;
+use std::collections::VecDeque;
+
 
 pub fn initialize() -> Result<(), eframe::Error> {
     let options = NativeOptions::default();
@@ -42,6 +46,9 @@ pub struct MyApp {
     pub frame_receiver: Option<mpsc::Receiver<ScreenCapture>>,
     pub texture: Option<egui::TextureHandle>,
     pub receiving_flag: Arc<Mutex<bool>>,
+
+    pub frame_buffer: Arc<Mutex<VecDeque<ScreenCapture>>>, // Buffer condiviso per i frame
+
 }
 
 impl MyApp {
@@ -59,6 +66,9 @@ impl MyApp {
             frame_receiver: None,
             texture: None,
             receiving_flag: Arc::new(Mutex::new(false)),
+
+            frame_buffer: Arc::new(Mutex::new(VecDeque::new())), // Inizializza il buffer
+
         }
     }
 
@@ -78,6 +88,13 @@ impl MyApp {
                     egui::TextureOptions::LINEAR,
                 );
                 self.texture = Some(texture);
+
+                // Aggiungi il frame al buffer
+                let mut buffer = self.frame_buffer.lock().unwrap();
+                buffer.push_back(frame);
+                if buffer.len() > 10 { // Mantieni solo gli ultimi 10 frame
+                    buffer.pop_front();
+                }
             }
         }
     }
@@ -188,6 +205,39 @@ impl MyApp {
         }
     }
 
+    pub fn start_recording_receiver(&mut self) {
+        println!("Starting recording in receiver mode...");
+        self.flags.set_recording(true);
+
+        let record_flag = Arc::new(Mutex::new(true));
+        let (tx, rx) = mpsc::channel();
+        self.network.set_record_stop_tx(Some(tx));
+
+        let (width, height) = if let Some(texture) = &self.texture {
+            (texture.size()[0], texture.size()[1])
+        } else {
+            (1920, 1080) // Dimensioni predefinite
+        };
+
+        let frame_buffer = Arc::clone(&self.frame_buffer);
+
+        thread::spawn(move || {
+            start_record_thread_for_receiver(record_flag, rx, frame_buffer, width, height);
+        });
+    }
+    
+
+    pub fn stop_recording_receiver(&mut self) {
+        println!("Stopping recording in receiver mode...");
+        self.flags.set_recording(false);
+
+        if let Some(tx) = self.network.get_record_stop_tx() {
+            if let Err(e) = tx.send(()) {
+                println!("Failed to send stop signal: {:?}", e);
+            }
+        }
+    }
+
     pub fn stop_receiving(&mut self) {
         println!("Stopping receiving...");
         self.flags.set_receiving(false);
@@ -244,7 +294,7 @@ impl App for MyApp {
             if self.flags.is_receiving() {
                 self.update_receiver_ui(ctx);
             }
-
+    
             egui::CentralPanel::default().show(ctx, |ui| {
                 if self.ui_state.is_selecting_area() {
                     capture_area_panel(ctx, self);
@@ -255,7 +305,7 @@ impl App for MyApp {
                     central_panel(ctx, self);
                 }
             });
-
+    
             if self.flags.is_receiving() {
                 egui::Window::new("Receiving Window")
                     .default_width(800.0)
@@ -267,12 +317,16 @@ impl App for MyApp {
                             if ui.button("Stop Receiving").clicked() {
                                 self.stop_receiving();
                             }
-
-                            if ui.button("Another Button").clicked() {
-                                println!("Another button clicked!");
+    
+                            if ui.button(if self.flags.is_recording() { "Stop Recording" } else { "Start Recording" }).clicked() {
+                                if self.flags.is_recording() {
+                                    self.stop_recording_receiver();
+                                } else {
+                                    self.start_recording_receiver();
+                                }
                             }
                         });
-
+    
                         ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
                             if let Some(ref texture) = self.texture {
                                 ui.image(texture);
@@ -282,12 +336,16 @@ impl App for MyApp {
                         });
                     });
             }
-
+    
             if let Ok(event) = global_hotkey::GlobalHotKeyEvent::receiver().try_recv() {
                 if let Some(action) = self.hotkeys.hotkey_map.get(&event.id).cloned() {
                     self.handle_hotkey_action(action);
                 }
             }
+    
+            // Aggiungi una piccola pausa per evitare il carico eccessivo della CPU
+            std::thread::sleep(std::time::Duration::from_millis(10));
         }
     }
+    
 }

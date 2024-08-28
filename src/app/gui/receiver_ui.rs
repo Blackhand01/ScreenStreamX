@@ -4,6 +4,14 @@ use std::thread;
 use crate::app::network::start_client;
 use crate::app::capture::ScreenCapture;
 use super::app_main::MyApp;
+use std::process::Command;
+use crate::app::gui::caster_ui::{TARGET_FRAMERATE, FRAME_DURATION};
+use std::process::Stdio;
+use std::io::Write;
+use std::time::Instant;
+use std::collections::VecDeque;
+
+
 
 pub fn render_receiver_address_input(ui: &mut egui::Ui, app: &mut MyApp) {
     ui.vertical_centered(|ui| {
@@ -82,3 +90,80 @@ fn stop_receiving(app: &mut MyApp) {
     }
     app.set_frame_receiver(None);
 }
+
+pub fn start_record_thread_for_receiver(
+    record_flag: Arc<Mutex<bool>>,
+    rx: mpsc::Receiver<()>,
+    frame_buffer: Arc<Mutex<VecDeque<ScreenCapture>>>, // Usa il buffer condiviso
+    width: usize,
+    height: usize,
+) {
+    println!("Record thread for receiver started");
+
+    let mut child = Command::new("ffmpeg")
+        .args(&[
+            "-loglevel", "quiet",
+            "-f", "rawvideo",
+            "-pixel_format", "rgb0",
+            "-video_size", &format!("{}x{}", width, height),
+            "-framerate", &TARGET_FRAMERATE.to_string(),
+            "-i", "-",
+            "-c:v", "libx264",
+            "-preset", "ultrafast",
+            "-crf", "0",
+            "-pix_fmt", "yuv420p",
+            "-r", &TARGET_FRAMERATE.to_string(),
+            "-y", "recordings/receiver_recorded_video.mp4"
+        ])
+        .stdin(Stdio::piped())
+        .spawn()
+        .expect("Failed to start ffmpeg process");
+
+    let mut out = child.stdin.take().expect("Failed to open stdin");
+    let mut start_time = Instant::now();
+
+    while *record_flag.lock().unwrap() {
+        if rx.try_recv().is_ok() {
+            println!("Received stop signal, stopping recording...");
+            break;
+        }
+
+        if let Some(frame) = frame_buffer.lock().unwrap().pop_front() {
+            let stride = frame.data.len() / height;
+            let rowlen = 4 * width;
+            for row in frame.data.chunks(stride) {
+                let row = &row[..rowlen];
+                if out.write_all(row).is_err() {
+                    println!("Failed to write frame to ffmpeg");
+                    break;
+                }
+            }
+        } else {
+            // Attendi un breve periodo se non ci sono frame disponibili
+            std::thread::sleep(std::time::Duration::from_millis(10));
+        }
+
+        // Sincronizza il framerate
+        let elapsed = start_time.elapsed();
+        if elapsed < FRAME_DURATION {
+            std::thread::sleep(FRAME_DURATION - elapsed);
+        }
+        start_time = Instant::now();
+    }
+
+    println!("Flushing and closing ffmpeg...");
+    drop(out);
+
+    match child.wait() {
+        Ok(status) => {
+            println!("ffmpeg exited with status: {:?}", status);
+        }
+        Err(e) => {
+            println!("Failed to wait on ffmpeg child process: {}", e);
+        }
+    }
+
+    println!("Record thread for receiver exiting");
+}
+
+

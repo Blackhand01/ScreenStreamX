@@ -12,8 +12,8 @@ use super::app_main::MyApp;
 use std::net::{TcpListener, TcpStream, Shutdown};
 use lazy_static::lazy_static;
 
-const TARGET_FRAMERATE: u64 = 10; // Framerate target
-const FRAME_DURATION: Duration = Duration::from_millis(1000 / TARGET_FRAMERATE as u64);
+pub const TARGET_FRAMERATE: u64 = 10; // Framerate target
+pub const FRAME_DURATION: Duration = Duration::from_millis(1000 / TARGET_FRAMERATE as u64);
 
 lazy_static! {
     static ref RECEIVERS: Arc<Mutex<Vec<TcpStream>>> = Arc::new(Mutex::new(Vec::new()));
