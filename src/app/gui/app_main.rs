@@ -1,5 +1,5 @@
 use eframe::{egui, App, CreationContext};
-use crate::app::{capture::ScreenCapturer, gui::caster_ui, hotkey_module::{HotkeyAction, HotkeySettings}};
+use crate::app::{gui::caster_ui, hotkey_module::{HotkeyAction, HotkeySettings}};
 use crate::app::gui::visuals::{configure_visuals, central_panel, capture_area_panel, monitor_selection_panel, render_screen_lock_overlay};
 use std::sync::{mpsc, Arc, Mutex};
 use crate::app::state::{
@@ -234,60 +234,15 @@ impl MyApp {
             }
         }
     }
-
-    fn update_caster_ui(&mut self, ctx: &egui::Context) {
-        if let Some(frame) = self.capture_screen_frame() {
-            let texture_size = [frame.width as usize, frame.height as usize];
-            if texture_size.iter().all(|&dim| dim > 0) {
-                let texture = ctx.load_texture(
-                    "caster_frame",
-                    egui::ColorImage::from_rgba_unmultiplied(
-                        texture_size,
-                        &frame.data,
-                    ),
-                    egui::TextureOptions::LINEAR,
-                );
-                self.texture = Some(texture);
-            } else {
-                eprintln!("Invalid texture size: {:?}", texture_size);
-            }
-        } else {
-            eprintln!("Failed to capture screen frame.");
-        }
-    }
-
-    fn capture_screen_frame(&mut self) -> Option<ScreenCapture> {
-        let capture_area = self.capture.get_capture_area().cloned();
-        let mut screen_capturer = if let Some(area) = capture_area {
-            if area.is_valid() {
-                ScreenCapturer::new(Some(area))
-            } else {
-                ScreenCapturer::new(None)
-            }
-        } else {
-            ScreenCapturer::new(None) 
-        };
-
-        screen_capturer.capture_frame()
-    }
 }
-
-
-
 
 impl App for MyApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         if self.flags.is_screen_locked() {
             render_screen_lock_overlay(ctx);
         } else {
-            // Aggiorna la UI del receiver per visualizzare i frame ricevuti
             if self.flags.is_receiving() {
                 self.update_receiver_ui(ctx);
-            }
-
-            // Aggiorna la texture del caster durante la trasmissione
-            if self.flags.is_broadcasting() {
-                self.update_caster_ui(ctx);
             }
 
             egui::CentralPanel::default().show(ctx, |ui| {
