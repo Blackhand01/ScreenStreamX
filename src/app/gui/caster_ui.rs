@@ -2,7 +2,6 @@
 
 use eframe::egui;
 use crate::app::capture::{CaptureArea, ScreenCapturer};
-use crate::utils::annotations::toggle_annotation_tools;
 use std::sync::{mpsc, Arc, Mutex};
 use std::{thread, fs};
 use std::process::{Command, Stdio};
@@ -347,28 +346,7 @@ pub fn create_recording_directory(dir: &str) {
     fs::create_dir_all(dir).expect("Failed to create recording directory");
 }
 
-/// Funzione per il rendering del pulsante di attivazione/disattivazione degli strumenti di annotazione
-pub fn render_annotation_toggle_button(ui: &mut egui::Ui, app: &mut MyApp) {
-    let button_label = if app.flags.is_annotation_tools_active() {
-        "Disable Annotation Tools"
-    } else {
-        "Enable Annotation Tools"
-    };
 
-    if ui.add_sized(
-        [200.0, 40.0],
-        egui::Button::new(
-            egui::RichText::new(button_label)
-                .color(egui::Color32::WHITE)
-                .strong(),
-        )
-        .fill(egui::Color32::from_rgb(153, 0, 153)), // Viola per indicare le annotazioni
-    ).clicked() {
-        println!("Toggle Annotation Tools clicked");
-        toggle_annotation_tools(app);
-    }
-    ui.add_space(10.0);
-}
 
 pub fn render_multi_monitor_support_button(ui: &mut egui::Ui, app: &mut MyApp) {
     if ui.add_sized(
@@ -385,3 +363,30 @@ pub fn render_multi_monitor_support_button(ui: &mut egui::Ui, app: &mut MyApp) {
     }
 }
 
+/// Funzione per il rendering del pannello di anteprima del Caster
+pub fn render_caster_preview(ui: &mut egui::Ui, app: &mut MyApp) {
+    ui.group(|ui| {
+        ui.label(egui::RichText::new("Caster Preview").strong());
+
+        ui.add_space(10.0);
+
+        if let Some(ref texture) = app.texture {
+            let texture_size = texture.size_vec2();
+            let available_size = ui.available_size();
+
+            // Calcola la scala per adattare l'immagine alla finestra disponibile mantenendo le proporzioni
+            let scale = (available_size.x / texture_size.x).min(available_size.y / texture_size.y);
+            let scaled_size = texture_size * scale;
+
+            // Calcola il rettangolo dell'immagine centrato
+            let image_rect = egui::Rect::from_min_size(ui.min_rect().min, scaled_size);
+
+            // Disegna l'immagine ridimensionata nel rettangolo calcolato
+            ui.allocate_ui_at_rect(image_rect, |ui| {
+                ui.image(texture);
+            });
+        } else {
+            ui.label("No preview available.");
+        }
+    });
+}

@@ -5,6 +5,7 @@ use super::receiver_ui::render_receiving_button;
 use crate::app::capture::CaptureArea;
 use crate::utils::multi_monitor::get_available_monitors;
 
+
 /// Pannello di selezione del monitor con un pulsante "Indietro" migliorato e pulsanti accattivanti per la selezione del monitor.
 pub fn monitor_selection_panel(ctx: &egui::Context, app: &mut MyApp) {
     egui::CentralPanel::default().show(ctx, |ui| {
