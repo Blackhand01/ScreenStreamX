@@ -57,6 +57,7 @@ fn handle_receiving_button_click(app: &mut MyApp) {
 }
 
 fn start_receiving(app: &mut MyApp) {
+    
     println!("Starting receiving...");
     app.flags.set_receiving(true);
 

@@ -11,7 +11,7 @@ use super::app_main::MyApp;
 use std::net::{TcpListener, TcpStream, Shutdown};
 use lazy_static::lazy_static;
 
-pub const TARGET_FRAMERATE: u64 = 10; // Framerate target
+pub const TARGET_FRAMERATE: u64 = 20; // Framerate target
 pub const FRAME_DURATION: Duration = Duration::from_millis(1000 / TARGET_FRAMERATE as u64);
 
 lazy_static! {

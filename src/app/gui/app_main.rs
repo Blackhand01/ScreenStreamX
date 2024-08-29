@@ -92,7 +92,7 @@ impl MyApp {
                 // Aggiungi il frame al buffer
                 let mut buffer = self.frame_buffer.lock().unwrap();
                 buffer.push_back(frame);
-                if buffer.len() > 10 { // Mantieni solo gli ultimi 10 frame
+                if buffer.len() > 20 { // Mantieni solo gli ultimi 10 frame
                     buffer.pop_front();
                 }
             }
@@ -306,37 +306,6 @@ impl App for MyApp {
                 }
             });
     
-            if self.flags.is_receiving() {
-                egui::Window::new("Receiving Window")
-                    .default_width(800.0)
-                    .default_height(600.0)
-                    .collapsible(false)
-                    .resizable(true)
-                    .show(ctx, |ui| {
-                        egui::TopBottomPanel::top("top_panel").show_inside(ui, |ui| {
-                            if ui.button("Stop Receiving").clicked() {
-                                self.stop_receiving();
-                            }
-    
-                            if ui.button(if self.flags.is_recording() { "Stop Recording" } else { "Start Recording" }).clicked() {
-                                if self.flags.is_recording() {
-                                    self.stop_recording_receiver();
-                                } else {
-                                    self.start_recording_receiver();
-                                }
-                            }
-                        });
-    
-                        ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
-                            if let Some(ref texture) = self.texture {
-                                ui.image(texture);
-                            } else {
-                                ui.label("No image received yet.");
-                            }
-                        });
-                    });
-            }
-    
             if let Ok(event) = global_hotkey::GlobalHotKeyEvent::receiver().try_recv() {
                 if let Some(action) = self.hotkeys.hotkey_map.get(&event.id).cloned() {
                     self.handle_hotkey_action(action);
@@ -344,7 +313,7 @@ impl App for MyApp {
             }
     
             // Aggiungi una piccola pausa per evitare il carico eccessivo della CPU
-            std::thread::sleep(std::time::Duration::from_millis(10));
+            std::thread::sleep(std::time::Duration::from_millis(5));
         }
     }
     

@@ -255,7 +255,6 @@ pub fn central_panel(ctx: &egui::Context, app: &mut MyApp) {
     egui::CentralPanel::default().show(ctx, |ui| {
         // Barra superiore per i controlli della finestra e il cambio tema
         ui.horizontal(|ui| {
-
             // Posiziona il pulsante per il cambio tema a destra
             ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                 render_theme_toggle_button(ui, app);
@@ -284,13 +283,14 @@ pub fn central_panel(ctx: &egui::Context, app: &mut MyApp) {
             ui.add_space(20.0);
 
             // Renderizza l'interfaccia specifica basata sulla modalità selezionata
-            render_mode_ui(ui, app);
+            render_mode_ui(ctx, ui, app);
         });
 
         // Renderizza la finestra delle scorciatoie se necessario
         render_shortcuts_window(ctx, app);
     });
 }
+
 
 
 fn render_show_shortcuts_button(ui: &mut egui::Ui, app: &mut MyApp) {
@@ -429,7 +429,7 @@ fn render_receiver_button(ui: &mut egui::Ui, app: &mut MyApp) {
 /// Rendering dell'interfaccia utente basato sulla modalità selezionata
 // src/app/gui/central_panel.rs
 
-fn render_mode_ui(ui: &mut egui::Ui, app: &mut MyApp) {
+fn render_mode_ui(ctx: &egui::Context, ui: &mut egui::Ui, app: &mut MyApp) {
     if app.is_caster() {
         render_caster_ui(ui, app);
     } else {
@@ -437,31 +437,41 @@ fn render_mode_ui(ui: &mut egui::Ui, app: &mut MyApp) {
 
         if app.flags.is_receiving() {
             ui.separator();
-            render_receiving_screen(ui, app);
+            render_receiving_screen(ctx, app);
         }
     }
 }
 
 
-pub fn render_receiving_screen(ui: &mut egui::Ui, app: &mut MyApp) {
-    if let Some(ref texture) = app.texture {
-        let texture_size = texture.size_vec2();
-        let available_size = ui.available_size();
+pub fn render_receiving_screen(ctx: &egui::Context, app: &mut MyApp) {
+    egui::Window::new("Receiving Window")
+        .default_width(800.0)
+        .default_height(600.0)
+        .collapsible(false)
+        .resizable(true)
+        .show(ctx, |ui| {
+            egui::TopBottomPanel::top("top_panel").show_inside(ui, |ui| {
+                if ui.button("Stop Receiving").clicked() {
+                    app.stop_receiving();
+                }
 
-        // Calcola la scala per adattare l'immagine alla finestra disponibile mantenendo le proporzioni
-        let scale = (available_size.x / texture_size.x).min(available_size.y / texture_size.y);
-        let scaled_size = texture_size * scale;
+                if ui.button(if app.flags.is_recording() { "Stop Recording" } else { "Start Recording" }).clicked() {
+                    if app.flags.is_recording() {
+                        app.stop_recording_receiver();
+                    } else {
+                        app.start_recording_receiver();
+                    }
+                }
+            });
 
-        // Calcola il rettangolo dell'immagine centrato
-        let image_rect = egui::Rect::from_min_size(ui.min_rect().min, scaled_size);
-
-        // Disegna l'immagine ridimensionata nel rettangolo calcolato
-        ui.allocate_ui_at_rect(image_rect, |ui| {
-            ui.image(texture);
+            ui.with_layout(egui::Layout::top_down(egui::Align::Center), |ui| {
+                if let Some(ref texture) = app.texture {
+                    ui.image(texture);
+                } else {
+                    ui.label("No image received yet.");
+                }
+            });
         });
-    } else {
-        ui.label("No image received yet.");
-    }
 }
 
 
