@@ -92,3 +92,6 @@ We would like to thank the contributors and the Rust community for their support
 ---
 
 For more details and documentation, please visit the [Wiki](https://github.com/your-username/screenstreamx/wiki) page. If you encounter any issues or have any questions, feel free to open an issue on GitHub.
+
+## TO DO
+Implementare annotazioni  -> lato caster 
