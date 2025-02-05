@@ -10,14 +10,30 @@ use std::process::Stdio;
 use std::io::Write;
 use std::time::Instant;
 use std::collections::VecDeque;
-
+use local_ip_address::local_ip;
 
 
 pub fn render_receiver_address_input(ui: &mut egui::Ui, app: &mut MyApp) {
     ui.vertical_centered(|ui| {
         ui.horizontal(|ui| {
-            ui.label(egui::RichText::new("Caster address:").strong());
-            ui.text_edit_singleline(&mut app.network.get_address());
+            ui.label(egui::RichText::new("Caster Address:").strong());
+
+            // Toggle between Auto IP Detection and Manual Entry
+            if ui.checkbox(&mut app.network.auto_detect_ip, "Auto Detect IP").changed() {
+                if app.network.auto_detect_ip {
+                    // Automatically get the local IP
+                    if let Ok(ip) = local_ip() {
+                        app.network.set_address(ip.to_string());
+                    } else {
+                        app.network.set_address("Unable to get IP".to_string());
+                    }
+                }
+            }
+
+            // If auto-detect is disabled, allow manual entry
+            ui.add_enabled_ui(!app.network.auto_detect_ip, |ui| {
+                ui.text_edit_singleline(&mut app.network.address);
+            });
         });
     });
     ui.add_space(10.0);

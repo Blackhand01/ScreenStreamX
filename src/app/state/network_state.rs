@@ -2,7 +2,8 @@ use std::sync::mpsc;
 use local_ip_address::local_ip;
 
 pub struct NetworkState {
-    address: String,
+    pub address: String,
+    pub auto_detect_ip: bool, // New flag for toggling auto/manual IP selection
     stop_tx: Option<mpsc::Sender<()>>,
     broadcast_stop_tx: Option<mpsc::Sender<()>>,
     record_stop_tx: Option<mpsc::Sender<()>>,
@@ -17,6 +18,7 @@ impl NetworkState {
 
         Self {
             address: ip_address,
+            auto_detect_ip: true, // Default to auto-detection
             stop_tx: None,
             broadcast_stop_tx: None,
             record_stop_tx: None,
