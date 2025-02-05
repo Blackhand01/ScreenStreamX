@@ -11,6 +11,11 @@ use super::app_main::MyApp;
 use std::net::{TcpListener, TcpStream, Shutdown};
 use lazy_static::lazy_static;
 
+use crate::app::gui::app_main::{AnnotationTool};
+use crate::utils::annotations::Annotation;
+use eframe::emath::RectTransform;
+use eframe::egui::Shape;
+
 pub const TARGET_FRAMERATE: u64 = 20; // Framerate target
 pub const FRAME_DURATION: Duration = Duration::from_millis(1000 / TARGET_FRAMERATE as u64);
 
@@ -362,31 +367,221 @@ pub fn render_multi_monitor_support_button(ui: &mut egui::Ui, app: &mut MyApp) {
         app.ui_state.set_showing_monitor_selection(true); // Mostra la selezione monitor
     }
 }
+//creare nuova annotazione o aggiornarla
 
-/// Funzione per il rendering del pannello di anteprima del Caster
-pub fn render_caster_preview(ui: &mut egui::Ui, app: &mut MyApp) {
-    ui.group(|ui| {
-        ui.label(egui::RichText::new("Caster Preview").strong());
+fn create_new_annotation(tool: AnnotationTool, start: egui::Pos2) -> Annotation {
+    use crate::utils::annotations::Annotation;
 
-        ui.add_space(10.0);
+    let color = egui::Color32::RED;        // colore di default
+    let fill_color = egui::Color32::TRANSPARENT;
+    let width = 2.0;
+    let font_size = 24.0;
 
-        if let Some(ref texture) = app.texture {
-            let texture_size = texture.size_vec2();
-            let available_size = ui.available_size();
-
-            // Calcola la scala per adattare l'immagine alla finestra disponibile mantenendo le proporzioni
-            let scale = (available_size.x / texture_size.x).min(available_size.y / texture_size.y);
-            let scaled_size = texture_size * scale;
-
-            // Calcola il rettangolo dell'immagine centrato
-            let image_rect = egui::Rect::from_min_size(ui.min_rect().min, scaled_size);
-
-            // Disegna l'immagine ridimensionata nel rettangolo calcolato
-            ui.allocate_ui_at_rect(image_rect, |ui| {
-                ui.image(texture);
-            });
-        } else {
-            ui.label("No preview available.");
+    match tool {
+        AnnotationTool::Segment => Annotation::segment(start, color, width),
+        AnnotationTool::Circle  => Annotation::circle(start, color, width, fill_color),
+        AnnotationTool::Rectangle => Annotation::rect(start, color, fill_color, width),
+        AnnotationTool::Arrow   => Annotation::arrow(start, color, width),
+        AnnotationTool::Pencil  => Annotation::pencil(start, color, width),
+        AnnotationTool::Highlighter => Annotation::highlighter(start, egui::Color32::from_rgba_premultiplied(255, 255, 0, 100), width),
+        AnnotationTool::Text    => Annotation::text(start, color, font_size),
+        AnnotationTool::Crop    => Annotation::crop(start),
+        AnnotationTool::Eraser  => {
+            // L'eraser di solito va gestito diversamente (cancellazione),
+            // ma per semplicità creiamo un "segment" invisibile
+            Annotation::segment(start, egui::Color32::TRANSPARENT, 0.0)
         }
-    });
+    }
 }
+
+fn update_annotation_in_progress(ann: &mut Annotation, current_pos: egui::Pos2) {
+    match ann {
+        Annotation::Segment(seg) => {
+            seg.update_ending(current_pos);
+        }
+        Annotation::Circle(c) => {
+            c.update_radius(current_pos);
+        }
+        Annotation::Rect(r) => {
+            r.update_p2(current_pos);
+        }
+        Annotation::Arrow(a) => {
+            a.update_ending(current_pos);
+        }
+        Annotation::Pencil(p) => {
+            p.update_points(current_pos);
+        }
+        Annotation::Highlighter(h) => {
+            h.update_points(current_pos);
+        }
+        Annotation::Text(_t) => {
+            // In questo caso potresti voler aprire una finestra di input testuale 
+            // oppure accumulare i caratteri in input. 
+            // (Molti progetti gestiscono la TextAnnotation in modo diverso)
+        }
+        Annotation::Crop(crop) => {
+            crop.update(current_pos);
+        }
+        Annotation::Eraser(_e) => {
+            // Da definire come vuoi gestirlo: es. controllare se clicchiamo su un’annotazione esistente
+            // e la rimuoviamo dalla app.annotations
+        }
+    }
+}
+
+//render annotazioni
+
+
+pub fn render_all_annotations(ui: &mut egui::Ui, app: &MyApp, rect: &egui::Rect) {
+    let painter = ui.painter();
+    
+    // Costruiamo una trasformazione (src -> dst) 
+    // dove src è (0,0) -> (texture_width, texture_height)
+    // e dst è rect
+    // (Qui semplifico: se il tuo frame è 1920x1080, e rect è 800x600, la trasformazione farà il resize)
+    let Some(texture) = &app.texture else { return; };
+    let src_rect = egui::Rect::from_min_size(egui::Pos2::ZERO, texture.size_vec2());
+    
+    let transform = RectTransform::from_to(src_rect, *rect);
+
+    // Disegna ogni annotazione
+    for ann in &app.annotations {
+        // `render` ritorna uno Shape
+        let shape = ann.render(
+            1.0,           // se vuoi passare uno scaling personalizzato
+            transform,
+            painter,
+            false          // 'editing' false perché non stiamo editando in diretta
+        );
+        painter.add(shape);
+    }
+
+    // Se c'è un'annotazione in corso di creazione, disegnala in overlay
+    if let Some(ann_in_prog) = &app.annotation_in_progress {
+        let shape = ann_in_prog.render(1.0, transform, painter, true);
+        painter.add(shape);
+    }
+}
+
+
+pub fn handle_annotation_input(
+    ui: &mut egui::Ui,
+    app: &mut MyApp,
+    response: &egui::Response,
+    rect: &egui::Rect,
+) {
+    // Se non abbiamo selezionato nessun tool, esci subito
+    let Some(tool) = app.selected_tool else { return; };
+
+    // Controlliamo se l'utente ha iniziato il drag
+    if response.drag_started() {
+        let start_pos = response.interact_pointer_pos().unwrap();
+        
+        // Calcoliamo la posizione in coordinate "originali" (dipende da come hai impostato la trasformazione)
+        // Se semplifichiamo, consideriamo rect come (0,0)->(width,height).
+        // Se vuoi essere accurato, inverti il RectTransform definito sopra.
+        let local_start = start_pos - rect.min.to_vec2();
+
+        app.annotation_in_progress = Some(create_new_annotation(tool, local_start));
+    }
+
+    // Se l’utente sta trascinando e abbiamo un’annotazione in corso:
+    if response.dragged() {
+        if let Some(ann) = &mut app.annotation_in_progress {
+            let current_pos = response.interact_pointer_pos().unwrap();
+            let local_pos = current_pos - rect.min.to_vec2();
+            update_annotation_in_progress(ann, local_pos);
+        }
+    }
+
+    // Se l’utente rilascia il mouse (drag stop), spostiamo l’annotazione in `annotations`
+    if response.drag_stopped() {
+        if let Some(ann) = app.annotation_in_progress.take() {
+            app.annotations.push(ann);
+        }
+    }
+}
+
+
+/// Mostra una finestra (Window) ridimensionabile con la preview del Caster
+pub fn render_caster_preview_window(ctx: &egui::Context, app: &mut MyApp) {
+    // 1) Estrarre l'ID della texture (se esiste) fuori dalla closure
+    let maybe_texture_id = app.texture.as_ref().map(|t| t.id());
+    let maybe_texture_size = app.texture.as_ref().map(|t| t.size_vec2());
+
+    egui::Window::new("Caster Preview")
+        .default_width(800.0)
+        .default_height(600.0)
+        .resizable(true)
+        .show(ctx, |ui| {
+            // 2) Dentro la closure usiamo *solo* i dati locali (texture_id, etc.),
+            //    evitando di tenere un prestito immutabile di 'app'
+            if let (Some(texture_id), Some(texture_size)) = (maybe_texture_id, maybe_texture_size) {
+                // Esempio: allocheremo uno spazio grande quanto la finestra,
+                // e lo rendiamo "draggabile" per le annotazioni.
+                let available_size = ui.available_size();
+                let resp = ui.allocate_response(available_size, egui::Sense::click_and_drag());
+                let rect = resp.rect;
+
+                // Disegno dell'immagine
+                ui.painter().image(
+                    texture_id,
+                    rect,
+                    egui::Rect::from_min_size(egui::Pos2::ZERO, texture_size),
+                    egui::Color32::WHITE,
+                );
+
+                // Disegno annotazioni 
+                render_all_annotations(ui, app, &rect);
+
+                // Input annotazioni
+                handle_annotation_input(ui, app, &resp, &rect);
+
+            } else {
+                ui.label("No preview available.");
+            }
+        });
+}
+
+
+
+
+
+
+
+pub fn render_annotation_toolbar(ui: &mut egui::Ui, app: &mut MyApp) {
+    ui.label("Strumenti annotazione:");
+
+    // Pulsante Segment
+    if ui.button("Segment").clicked() {
+        app.selected_tool = Some(AnnotationTool::Segment);
+    }
+    if ui.button("Circle").clicked() {
+        app.selected_tool = Some(AnnotationTool::Circle);
+    }
+    if ui.button("Rect").clicked() {
+        app.selected_tool = Some(AnnotationTool::Rectangle);
+    }
+    if ui.button("Arrow").clicked() {
+        app.selected_tool = Some(AnnotationTool::Arrow);
+    }
+    if ui.button("Pencil").clicked() {
+        app.selected_tool = Some(AnnotationTool::Pencil);
+    }
+    if ui.button("Highlighter").clicked() {
+        app.selected_tool = Some(AnnotationTool::Highlighter);
+    }
+    if ui.button("Text").clicked() {
+        app.selected_tool = Some(AnnotationTool::Text);
+    }
+    if ui.button("Crop").clicked() {
+        app.selected_tool = Some(AnnotationTool::Crop);
+    }
+    // In base alle tue necessità, potresti voler gestire l'Eraser in modo diverso
+    if ui.button("Eraser").clicked() {
+        app.selected_tool = Some(AnnotationTool::Eraser);
+    }
+
+    ui.separator();
+}
+

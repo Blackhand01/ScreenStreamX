@@ -1,97 +1,108 @@
-# ScreenStreamX
 
-## Overview
 
-ScreenStreamX is a multi-platform screen-casting application developed in Rust. The application is designed to continuously capture the content of your screen (or a portion of it) and stream it to a set of peers. It is compatible with Windows, macOS, and Linux, and features a user-friendly interface for seamless navigation.
+# **ScreenStreamX**
 
-## Features
+## **Overview**
 
-### Core Features
+**ScreenStreamX** is a **multi-platform screen-sharing application** built in **Rust**. It allows users to **capture and stream their screen** (or a selected portion of it) to multiple receivers in real-time. The application supports **Windows, macOS, and Linux** and features an intuitive UI with customizable hotkeys.
 
-1. **Platform Support**: Compatible with Windows, macOS, and Linux.
-2. **User Interface (UI)**: Intuitive and user-friendly interface.
-3. **Operating Mode**:
-    - **Caster Mode**: Streams the screen content.
-    - **Receiver Mode**: Connects to a caster and displays the streamed content. Users can specify the address of the caster to connect to.
-4. **Selection Options**: In caster mode, users can restrict the captured content to a custom area of the screen.
-5. **Hotkey Support**: Customizable keyboard shortcuts for:
-    - Pausing/resuming the transmission.
-    - Blanking the screen.
-    - Terminating the current session.
+## **Features**
 
-### Bonus Features
+### **🔹 Core Features**
+- **Multi-platform support**: Works on **Windows, macOS, and Linux**.
+- **User-friendly interface**: Easy-to-navigate UI with real-time control.
+- **Operating Modes**:
+  - **Caster Mode** 🎥: Streams the screen content to receivers.
+  - **Receiver Mode** 📡: Connects to a caster and displays the streamed content.
+- **Custom Capture Area**: Allows users to select a specific area of the screen to stream.
+- **Hotkey Support**:
+  - Start/stop streaming.
+  - Pause/resume transmission.
+  - Lock/unlock the screen.
+  - End the session.
 
-6. **Annotation Tools**: In caster mode, users can activate/deactivate a transparent layer on top of the captured area to superimpose annotations such as shapes, arrows, and text.
-7. **Save Options**: In receiver mode, users can record the received content to a video file.
-8. **Multi-Monitor Support**: The application can recognize and handle multiple monitors independently, allowing users to cast content from any connected display.
-
-## Getting Started
-
-### Prerequisites
-
-- Rust programming language installed on your machine.
-- Compatible operating system (Windows, macOS, or Linux).
-
-### Installation
-
-1. Clone the repository:
-    ```sh
-    git clone https://github.com/your-username/screenstreamx.git
-    cd screenstreamx
-    ```
-
-2. Build the project:
-    ```sh
-    cargo build --release
-    ```
-
-### Running the Application
-
-1. Start the application:
-    ```sh
-    cargo run --release
-    ```
-
-2. Choose the operating mode (caster or receiver) upon startup.
-3. Follow the on-screen instructions to either start casting your screen or connect to a caster.
-
-### Customizing Hotkeys
-
-Hotkeys can be customized through the application settings menu. Default hotkeys include:
-- **Pause/Resume**: `Ctrl + Alt + P`
-- **Blank Screen**: `Ctrl + Alt + B`
-- **Terminate Session**: `Ctrl + Alt + T`
-
-## Contributing
-
-We welcome contributions to enhance the functionality and usability of this application. To contribute, please follow these steps:
-
-1. Fork the repository.
-2. Create a new branch:
-    ```sh
-    git checkout -b feature/your-feature-name
-    ```
-3. Make your changes and commit them:
-    ```sh
-    git commit -m "Add your commit message"
-    ```
-4. Push to the branch:
-    ```sh
-    git push origin feature/your-feature-name
-    ```
-5. Open a pull request.
-
-## License
-
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
-
-## Acknowledgements
-
-We would like to thank the contributors and the Rust community for their support and valuable contributions.
+### **🔹 Advanced Features**
+- **Live Annotations** ✍️: In caster mode, users can draw and overlay annotations such as:
+  - Lines, circles, rectangles, arrows.
+  - Pencil and highlighter tools.
+  - Text, eraser, and crop tools.
+- **Screen Recording** 🎥: In receiver mode, users can record the received stream to a video file.
+- **Multi-Monitor Support** 🖥️: Select and stream from any connected monitor.
 
 ---
 
-For more details and documentation, please visit the [Wiki](https://github.com/your-username/screenstreamx/wiki) page. If you encounter any issues or have any questions, feel free to open an issue on GitHub.
+## **📌 Getting Started**
 
-## TO DO
-Implementare annotazioni  -> lato caster 
+### **🔹 Prerequisites**
+- **Rust** installed on your system.
+- A compatible operating system (**Windows/macOS/Linux**).
+
+### **🔹 Installation**
+1. Clone the repository:
+   ```sh
+   git clone https://github.com/your-username/screenstreamx.git
+   cd screenstreamx
+   ```
+2. Build the project:
+   ```sh
+   cargo build --release
+   ```
+
+---
+
+## **🚀 Running the Application**
+
+1. Start the application:
+   ```sh
+   cargo run --release
+   ```
+2. Choose the operating mode: **Caster** (streaming) or **Receiver** (viewing).
+3. Follow the on-screen instructions to either start a stream or connect to a caster.
+
+---
+
+## **🎯 Customizing Hotkeys**
+Hotkeys can be modified through the application settings.  
+**Default hotkeys include**:
+- **Start/Pause Streaming**: `Ctrl + Shift + B`
+- **Start/Stop Recording**: `Ctrl + Shift + R`
+- **Lock/Unlock Screen**: `Ctrl + Shift + L`
+- **Toggle Annotations**: `Ctrl + Shift + A`
+- **Quick Capture Selection**: `Ctrl + Shift + S`
+- **End Session**: `Ctrl + Shift + Q`
+- **Switch Monitor**: `Ctrl + Shift + M`
+
+---
+
+## **🤝 Contributing**
+We welcome contributions to enhance ScreenStreamX! Follow these steps:
+
+1. **Fork** the repository.
+2. Create a new branch:
+   ```sh
+   git checkout -b feature/your-feature-name
+   ```
+3. Make your changes and commit:
+   ```sh
+   git commit -m "Description of your changes"
+   ```
+4. Push to your branch:
+   ```sh
+   git push origin feature/your-feature-name
+   ```
+5. Open a **Pull Request**.
+
+---
+
+## **📜 License**
+This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for details.
+
+---
+
+## **📢 Acknowledgements**
+A big thanks to all contributors and the **Rust** community for their support.
+
+📖 **For more details, check out the [Wiki](https://github.com/your-username/screenstreamx/wiki).**  
+❓ **If you encounter issues, feel free to open a GitHub issue.** 🚀
+
+---

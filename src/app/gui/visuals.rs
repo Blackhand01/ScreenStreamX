@@ -490,4 +490,3 @@ pub fn render_screen_lock_overlay(ctx: &egui::Context) {
         });
     });
 }
-

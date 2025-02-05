@@ -3,6 +3,8 @@ pub struct UIState {
     show_confirmation_dialog: bool,
     show_monitor_selection: bool,
     show_shortcuts_menu: bool,
+    show_caster_preview_window: bool,
+
 }
 
 impl UIState {
@@ -12,6 +14,7 @@ impl UIState {
             show_confirmation_dialog: false,
             show_monitor_selection: false,
             show_shortcuts_menu: false,
+            show_caster_preview_window: false,
         }
     }
 
@@ -45,5 +48,13 @@ impl UIState {
 
     pub fn set_showing_shortcuts_menu(&mut self, value: bool) {
         self.show_shortcuts_menu = value;
+    }
+
+    pub fn is_showing_caster_preview_window(&self) -> bool {
+        self.show_caster_preview_window
+    }
+
+    pub fn set_showing_caster_preview_window(&mut self, value: bool) {
+        self.show_caster_preview_window = value;
     }
 }

@@ -14,6 +14,9 @@ use crate::app::capture::ScreenCapture;
 use std::thread;
 use crate::app::gui::receiver_ui::start_record_thread_for_receiver;
 use std::collections::VecDeque;
+use crate::utils::annotations::Annotation;
+use crate::app::capture::ScreenCapturer;
+use std::time::Duration;
 
 
 pub fn initialize() -> Result<(), eframe::Error> {
@@ -34,7 +37,18 @@ pub enum AppMode {
     Caster,
     Receiver,
 }
-
+#[derive(Debug, Clone, Copy)]
+pub enum AnnotationTool {
+    Segment,
+    Circle,
+    Rectangle,
+    Arrow,
+    Pencil,
+    Highlighter,
+    Text,
+    Eraser,
+    Crop,
+}
 pub struct MyApp {
     pub mode: AppMode,
     pub network: NetworkState,
@@ -49,6 +63,21 @@ pub struct MyApp {
 
     pub frame_buffer: Arc<Mutex<VecDeque<ScreenCapture>>>, // Buffer condiviso per i frame
 
+    // Lista delle annotazioni create
+    pub annotations: Vec<Annotation>,
+
+    // Quando l'utente sta tracciando un'annotazione in tempo reale (drag in corso)
+    pub annotation_in_progress: Option<Annotation>,
+
+    // Tipo di strumento di annotazione selezionato
+    pub selected_tool: Option<AnnotationTool>,
+
+    // Canale su cui il thread di preview invia i frame al main thread
+    caster_preview_rx: Option<mpsc::Receiver<crate::app::capture::ScreenCapture>>,
+    // Per fermare il thread di preview
+    caster_preview_stop: Option<mpsc::Sender<()>>,
+    // Per aspettare che il thread finisca (opzionale)
+    caster_preview_handle: Option<thread::JoinHandle<()>>,
 }
 
 impl MyApp {
@@ -68,7 +97,13 @@ impl MyApp {
             receiving_flag: Arc::new(Mutex::new(false)),
 
             frame_buffer: Arc::new(Mutex::new(VecDeque::new())), // Inizializza il buffer
-
+            
+            annotations: Vec::new(),
+            annotation_in_progress: None,
+            selected_tool: None,
+            caster_preview_rx: None,
+            caster_preview_stop: None,
+            caster_preview_handle: None,
         }
     }
 
@@ -284,6 +319,88 @@ impl MyApp {
             }
         }
     }
+
+
+    pub fn start_caster_preview_thread(&mut self) {
+        // Se stiamo già girando, non ricreare il thread
+        if self.caster_preview_rx.is_some() {
+            return;
+        }
+
+        // Prende l'area di cattura (se impostata)
+        let capture_area = self
+            .capture
+            .get_capture_area()
+            .cloned()
+            .filter(|area| area.is_valid());
+
+        // Crea un canale per fermare il thread
+        let (stop_tx, stop_rx) = mpsc::channel::<()>();
+        self.caster_preview_stop = Some(stop_tx);
+
+        // Crea un canale per inviare i frame al main thread
+        let (frame_tx, frame_rx) = mpsc::channel::<ScreenCapture>();
+        self.caster_preview_rx = Some(frame_rx);
+
+        // Avvia il thread vero e proprio
+        let handle = std::thread::spawn(move || {
+            // Crea un capturer (puoi riutilizzare la stessa area)
+            let mut capturer = ScreenCapturer::new(capture_area);
+
+            // Thread loop
+            loop {
+                // Controlla se c’è un segnale di stop
+                if stop_rx.try_recv().is_ok() {
+                    println!("Caster preview thread: Received stop signal, exiting...");
+                    break;
+                }
+
+                // Cattura frame
+                if let Some(frame) = capturer.capture_frame() {
+                    // println!(
+                    //     "Captured preview frame: {}x{}, data.len = {}",
+                    //     frame.width,
+                    //     frame.height,
+                    //     frame.data.len()
+                    // );
+                    // Manda il frame al main thread
+                    if frame_tx.send(frame).is_err() {
+                        // Se non c’è più nessuno in ascolto, termina
+                        break;
+                    }
+                }else {
+                    println!("Failed to capture frame (preview).");
+                }
+        
+
+                // Limitiamo a 5 fps (200ms)
+                std::thread::sleep(Duration::from_millis(200));
+            }
+
+            println!("Caster preview thread: finished");
+        });
+
+        // Salviamo l’handle se vogliamo poter fare .join() in futuro
+        self.caster_preview_handle = Some(handle);
+    }
+
+    pub fn stop_caster_preview_thread(&mut self) {
+        if let Some(stop_tx) = self.caster_preview_stop.take() {
+            let _ = stop_tx.send(()); // Manda segnale di stop
+        }
+
+        if let Some(handle) = self.caster_preview_handle.take() {
+            let _ = handle.join(); // aspetta che il thread finisca
+        }
+
+        // Svuota il receiver
+        self.caster_preview_rx = None;
+        //println!("Caster preview thread stopped");
+    }
+
+
+
+
 }
 
 impl App for MyApp {
@@ -291,6 +408,11 @@ impl App for MyApp {
         if self.flags.is_screen_locked() {
             render_screen_lock_overlay(ctx);
         } else {
+
+            if self.ui_state.is_showing_caster_preview_window() {
+                caster_ui::render_caster_preview_window(ctx, self);
+            }
+
             if self.flags.is_receiving() {
                 self.update_receiver_ui(ctx);
             }
@@ -314,6 +436,36 @@ impl App for MyApp {
     
             // Aggiungi una piccola pausa per evitare il carico eccessivo della CPU
             std::thread::sleep(std::time::Duration::from_millis(5));
+
+            //logica per mostrare preview con annotazioni lato caster
+            if self.is_caster() {
+                // Se NON c’è ancora un thread di preview, avvialo
+                if self.caster_preview_rx.is_none() {
+                    self.start_caster_preview_thread();
+                }
+            
+                // Prova a ricevere un frame
+                if let Some(rx) = &self.caster_preview_rx {
+                    if let Ok(frame) = rx.try_recv() {
+                        // Converti in texture
+                        let color_image = egui::ColorImage::from_rgba_unmultiplied(
+                            [frame.width as usize, frame.height as usize],
+                            &frame.data,
+                        );
+                        let texture = ctx.load_texture(
+                            "caster_preview_texture",
+                            color_image,
+                            egui::TextureOptions::LINEAR,
+                        );
+                        self.texture = Some(texture);
+                    }
+                }
+            } else {
+                // Non sei caster, quindi se c’è un thread di preview attivo, ferma tutto
+                self.stop_caster_preview_thread();
+            }
+            
+
         }
     }
     
