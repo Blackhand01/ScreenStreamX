@@ -27,7 +27,7 @@
   - Pencil and highlighter tools.
   - Text, eraser, and crop tools.
 - **Screen Recording** 🎥: In receiver mode, users can record the received stream to a video file.
-- **Multi-Monitor Support** 🖥️: Select and stream from any connected monitor.
+- **Multi-Monitor Support** 🖥️: Select and stream from any connected monitor.(Not already avaiable)
 
 ---
 
@@ -74,35 +74,8 @@ Hotkeys can be modified through the application settings.
 
 ---
 
-## **🤝 Contributing**
-We welcome contributions to enhance ScreenStreamX! Follow these steps:
-
-1. **Fork** the repository.
-2. Create a new branch:
-   ```sh
-   git checkout -b feature/your-feature-name
-   ```
-3. Make your changes and commit:
-   ```sh
-   git commit -m "Description of your changes"
-   ```
-4. Push to your branch:
-   ```sh
-   git push origin feature/your-feature-name
-   ```
-5. Open a **Pull Request**.
-
----
 
 ## **📜 License**
 This project is licensed under the **MIT License**. See the [LICENSE](LICENSE) file for details.
-
----
-
-## **📢 Acknowledgements**
-A big thanks to all contributors and the **Rust** community for their support.
-
-📖 **For more details, check out the [Wiki](https://github.com/your-username/screenstreamx/wiki).**  
-❓ **If you encounter issues, feel free to open a GitHub issue.** 🚀
 
 ---
